@@ -8,7 +8,8 @@ $packets = {
     :SELL_STOCK_REQ => 6,
     :BUY_STOCK_REQ => 7,
     :TRANSACTION_CHANGE => 8,
-    :NEW_TRANSACTION => 9,
+    :ORDER => 9,
+    :BEST_ORDER => 10,
     :SUBSCRIBE_STOCK => 10,
     :UNSUBSCRIBE_STOCK => 11,
     :SELL_STOCK_RESP => 12,
@@ -65,12 +66,13 @@ class StockPacketOut < StockPacket
   end
 
   def forge_final
-    #puts "Trying to send: #{@bytearray.unpack('c*')}"
+    puts "Trying to send: #{@bytearray.unpack('c*')}"
     [@bytearray.length].pack('s>') + @bytearray
   end
 end
 
 class StockPacketIn < StockPacket
+  attr_reader :packetlen
   def initialize(bytestring)
     #puts "#{bytestring.length} #{bytestring}"
     @bytearray  = bytestring.unpack('c*')
@@ -296,6 +298,7 @@ class BuyTransaction < StockPacketIn
   end
 end
 
+
 class TransactionChange <StockPacketIn
   attr_reader :stock_id, :amount, :price, :date
   def initialize(bytestring)
@@ -307,7 +310,7 @@ class TransactionChange <StockPacketIn
   end
 end
 
-class NewTransaction <StockPacketIn
+class Order <StockPacketIn
   attr_reader :type, :stock_id, :amount, :price, :date
   def initialize(bytestring)
     super(bytestring)
@@ -315,5 +318,86 @@ class NewTransaction <StockPacketIn
     @stock_id = self.pull('int')
     @amount   = self.pull('int')
     @price    = self.pull('int')
+  end
+end
+
+class BestOrder <StockPacketIn
+  attr_reader :type, :stock_id, :amount, :price, :date
+  def initialize(bytestring)
+    super(bytestring)
+    @type     = self.pull('byte')
+    @stock_id = self.pull('int')
+    @amount   = self.pull('int')
+    @price    = self.pull('int')
+  end
+end
+
+class SubscribeStock <StockPacketOut
+    attr_accessor :stock_id
+
+    def initialize(stock_id=nil, amount=nil, price=nil)
+      super($packets[:SUBSCRIBE_STOCK])
+      @stock_id = stock_id
+    end
+
+    def forge
+      self.push('int',@stock_id)
+      self.forge_final
+    end
+end
+
+class UnsubscribeStock <StockPacketOut
+  attr_accessor :stock_id
+
+  def initialize(stock_id=nil, amount=nil, price=nil)
+    super($packets[:UNSUBSCRIBE_STOCK])
+    @stock_id = stock_id
+  end
+
+  def forge
+    self.push('int',@stock_id)
+    self.forge_final
+  end
+end
+
+class CompanyStatus <StockPacketOut
+  attr_accessor :stock_id
+
+  def initialize(stock_id=nil, amount=nil, price=nil)
+    super($packets[:COMPANY_STATUS_REQ])
+    @stock_id = stock_id
+  end
+
+  def forge
+    self.push('int',@stock_id)
+    self.forge_final
+  end
+end
+
+
+class BestOrder <StockPacketIn
+  attr_reader :stock_id, :amount, :price, :date
+  def initialize(bytestring)
+    super(bytestring)
+    @type     = self.pull('byte')
+    @stock_id = self.pull('int')
+    @amount   = self.pull('int')
+    @price    = self.pull('int')
+  end
+end
+
+class CompanyActive <StockPacketIn
+  attr_reader :stock_id
+  def initialize(bytestring)
+    super(bytestring)
+    @stock_id = self.pull('int')
+  end
+end
+
+class CompanyFrozen <StockPacketIn
+  attr_reader :stock_id
+  def initialize(bytestring)
+    super(bytestring)
+    @stock_id = self.pull('int')
   end
 end
