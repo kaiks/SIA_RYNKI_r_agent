@@ -1,30 +1,32 @@
 $packets = {
-    :REGISTER_USER_REQ      => 0,
-    :REGISTER_USER_RESP_OK  => 1,
-    :REGISTER_USER_RESP_FAIL=> 2,
-    :LOGIN_USER_REQ         => 3,
-    :LOGIN_USER_RESP_OK     => 4,
-    :LOGIN_USER_RESP_FAIL   => 5,
-    :SUBSCRIBE_STOCK        => 6,
-    :UNSUBSCRIBE_STOCK      => 7,
-    :SELL_STOCK_REQ         => 8,
-    :SELL_STOCK_RESP        => 9,
-    :BUY_STOCK_REQ          => 10,
-    :BUY_STOCK_RESP         => 11,
-    :GET_STOCKS             => 12,
-    :LIST_OF_STOCKS         => 13,
-    :CHANGE_PRICE           => 14,
-    :COMPANY_STATUS_REQ     => 15,
-    :COMPANY_ACTIVE_RESP    => 16,
-    :COMPANY_FROZEN_RESP    => 17,
-    :BUY_TRANSACTION        => 18,
-    :SELL_TRANSACTION       => 19,
-    :SESSION_STARTED        => 20,
-    :SESSION_CLOSED         => 21,
-    :IS_SESSION_ACTIVE      => 22,
-    :SESSION_STATUS         => 23,
-    :UNDEFINED              => 24,
-    :UNRECOGNIZED_USER      => 25,
+    :REGISTER_USER_REQ => 0,
+    :REGISTER_USER_RESP_OK => 1,
+    :REGISTER_USER_RESP_FAIL => 2,
+    :LOGIN_USER_REQ => 3,
+    :LOGIN_USER_RESP_OK => 4,
+    :LOGIN_USER_RESP_FAIL => 5,
+    :SELL_STOCK_REQ => 6,
+    :BUY_STOCK_REQ => 7,
+    :TRANSACTION_CHANGE => 8,
+    :NEW_TRANSACTION => 9,
+    :SUBSCRIBE_STOCK => 10,
+    :UNSUBSCRIBE_STOCK => 11,
+    :SELL_STOCK_RESP => 12,
+    :BUY_STOCK_RESP => 13,
+    :GET_STOCKS => 14,
+    :LIST_OF_STOCKS => 15,
+    :CHANGE_PRICE => 16,
+    :COMPANY_STATUS_REQ => 17,
+    :COMPANY_ACTIVE_RESP => 18,
+    :COMPANY_FROZEN_RESP => 19,
+    :BUY_TRANSACTION => 19,
+    :SELL_TRANSACTION => 20,
+    :SESSION_STARTED => 21,
+    :SESSION_CLOSED => 22,
+    :IS_SESSION_ACTIVE => 23,
+    :SESSION_STATUS => 24,
+    :UNDEFINED => 25,
+    :UNRECOGNIZED_USER => 26
 }
 
 class StockPacket
@@ -33,6 +35,10 @@ class StockPacket
 
   def get
     @bytearray.pack('c*')
+  end
+
+  def readable
+    @bytearray.unpack('C*')
   end
 
 end
@@ -60,7 +66,7 @@ class StockPacketOut < StockPacket
 
   def forge_final
     #puts "Trying to send: #{@bytearray.unpack('c*')}"
-    [@bytearray.length].pack('s') + @bytearray
+    [@bytearray.length].pack('s>') + @bytearray
   end
 end
 
@@ -86,7 +92,7 @@ class StockPacketIn < StockPacket
         retval = @bytearray[@offset..@bytearray.length].pack('c*')
         @offset = @bytearray.length
       when 'byte' then
-        retval = @bytearray[@offset]
+        retval = [@bytearray[@offset]].pack('c*').unpack('c')[0]
         @offset += 1
       else
         raise 'Error: unexpected type'
@@ -177,7 +183,6 @@ end
 
 
 class LoginUserRespOk < StockPacketIn
-  attr_reader :user_id
   def initialize(bytestring)
     super(bytestring)
   end
@@ -288,5 +293,27 @@ class BuyTransaction < StockPacketIn
     super(bytestring)
     @stock_id = self.pull('int')
     @amount = self.pull('int')
+  end
+end
+
+class TransactionChange <StockPacketIn
+  attr_reader :stock_id, :amount, :price, :date
+  def initialize(bytestring)
+    super(bytestring)
+    @stock_id = self.pull('int')
+    @amount   = self.pull('int')
+    @price    = self.pull('int')
+    @date     = self.pull_len(self.pull('short'),'string')
+  end
+end
+
+class NewTransaction <StockPacketIn
+  attr_reader :type, :stock_id, :amount, :price, :date
+  def initialize(bytestring)
+    super(bytestring)
+    @type     = self.pull('byte')
+    @stock_id = self.pull('int')
+    @amount   = self.pull('int')
+    @price    = self.pull('int')
   end
 end
