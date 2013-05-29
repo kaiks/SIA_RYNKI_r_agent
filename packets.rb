@@ -311,7 +311,7 @@ class TransactionChange <StockPacketIn
 end
 
 class Order <StockPacketIn
-  attr_reader :type, :stock_id, :amount, :price, :date
+  attr_reader :type, :stock_id, :amount, :price
   def initialize(bytestring)
     super(bytestring)
     @type     = self.pull('byte')
@@ -322,7 +322,7 @@ class Order <StockPacketIn
 end
 
 class BestOrder <StockPacketIn
-  attr_reader :type, :stock_id, :amount, :price, :date
+  attr_reader :type, :stock_id, :amount, :price
   def initialize(bytestring)
     super(bytestring)
     @type     = self.pull('byte')
@@ -349,7 +349,7 @@ end
 class UnsubscribeStock <StockPacketOut
   attr_accessor :stock_id
 
-  def initialize(stock_id=nil, amount=nil, price=nil)
+  def initialize(stock_id=nil)
     super($packets[:UNSUBSCRIBE_STOCK])
     @stock_id = stock_id
   end
@@ -363,7 +363,7 @@ end
 class CompanyStatus <StockPacketOut
   attr_accessor :stock_id
 
-  def initialize(stock_id=nil, amount=nil, price=nil)
+  def initialize(stock_id=nil)
     super($packets[:COMPANY_STATUS_REQ])
     @stock_id = stock_id
   end
@@ -376,7 +376,7 @@ end
 
 
 class BestOrder <StockPacketIn
-  attr_reader :stock_id, :amount, :price, :date
+  attr_reader :stock_id, :amount, :price
   def initialize(bytestring)
     super(bytestring)
     @type     = self.pull('byte')
@@ -386,6 +386,8 @@ class BestOrder <StockPacketIn
   end
 end
 
+
+
 class CompanyActive <StockPacketIn
   attr_reader :stock_id
   def initialize(bytestring)
@@ -394,10 +396,38 @@ class CompanyActive <StockPacketIn
   end
 end
 
+
+
 class CompanyFrozen <StockPacketIn
   attr_reader :stock_id
   def initialize(bytestring)
     super(bytestring)
     @stock_id = self.pull('int')
+  end
+end
+
+
+
+class GetStocks <StockPacketOut
+
+  def initialize
+    super($packets[:GET_STOCKS])
+  end
+
+  def forge
+    self.forge_final
+  end
+end
+
+
+
+class GetOrders <StockPacketOut
+
+  def initialize
+    super($packets[:GET_ORDERS])
+  end
+
+  def forge
+    self.forge_final
   end
 end
