@@ -424,7 +424,6 @@ class StockInfo <StockPacketIn
   attr_reader :stock_id, :amount
   def initialize(bytestring)
     super(bytestring)
-    @type     = self.pull('byte')
     @stock_id = self.pull('int')
     @amount   = self.pull('int')
   end
