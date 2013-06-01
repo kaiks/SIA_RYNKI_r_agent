@@ -10,6 +10,7 @@ class SClient < EventMachine::Connection
     @id = user_id
     @password = password
     @buffer = ''
+    @my_stocks = {}
   end
 
   def post_init
@@ -20,6 +21,10 @@ class SClient < EventMachine::Connection
     else
       send_data LoginUserReq.new(@id,@password).forge
     end
+  end
+
+  def cash
+    @my_stocks[1]
   end
 
   def receive_data(data)
@@ -75,6 +80,12 @@ class SClient < EventMachine::Connection
         when $packets[:BEST_ORDER] then
           packet = BestOrder.new(packet.get)
           say "New best order: #{packet.type} #{packet.stock_id} #{packet.amount} #{packet.price}"
+          EventMachine.defer proc { on_best_order packet }
+
+        when $packets[:STOCK_INFO] then
+          packet = StockInfo.new(packet.get)
+          @my_stocks[packet.stock_id] = packet.amount
+          say "My stock info: #{packet.packetlen} #{packet.stock_id} #{packet.amount}"
           EventMachine.defer proc { on_best_order packet }
 
         else

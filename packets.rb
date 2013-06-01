@@ -1,33 +1,34 @@
 $packets = {
-    :REGISTER_USER_REQ => 0,
-    :REGISTER_USER_RESP_OK => 1,
-    :REGISTER_USER_RESP_FAIL => 2,
+    :REGISTER_USER_REQ      => 0,
+    :REGISTER_USER_RESP_OK  => 1,
+    :REGISTER_USER_RESP_FAIL        => 2,
     :LOGIN_USER_REQ => 3,
-    :LOGIN_USER_RESP_OK => 4,
-    :LOGIN_USER_RESP_FAIL => 5,
+    :LOGIN_USER_RESP_OK     => 4,
+    :LOGIN_USER_RESP_FAIL   => 5,
     :SELL_STOCK_REQ => 6,
-    :BUY_STOCK_REQ => 7,
-    :TRANSACTION_CHANGE => 8,
-    :ORDER => 9,
-    :BEST_ORDER => 10,
-    :SUBSCRIBE_STOCK => 11,
-    :UNSUBSCRIBE_STOCK => 12,
-    :SELL_STOCK_RESP => 13,
+    :BUY_STOCK_REQ  => 7,
+    :TRANSACTION_CHANGE     => 8,
+    :ORDER  => 9,
+    :BEST_ORDER     => 10,
+    :SUBSCRIBE_STOCK        => 11,
+    :UNSUBSCRIBE_STOCK      => 12,
+    :SELL_STOCK_RESP        => 13,
     :BUY_STOCK_RESP => 14,
-    :GET_STOCKS => 15,
+    :GET_STOCKS     => 15,
     :LIST_OF_STOCKS => 16,
-    :CHANGE_PRICE => 17,
-    :COMPANY_STATUS_REQ => 18,
-    :COMPANY_ACTIVE_RESP => 19,
-    :COMPANY_FROZEN_RESP => 20,
-    :BUY_TRANSACTION => 21,
-    :SELL_TRANSACTION => 22,
-    :SESSION_STARTED => 23,
+    :CHANGE_PRICE   => 17,
+    :COMPANY_STATUS_REQ     => 18,
+    :COMPANY_ACTIVE_RESP    => 19,
+    :COMPANY_FROZEN_RESP    => 20,
+    :BUY_TRANSACTION        => 21,
+    :SELL_TRANSACTION       => 22,
+    :SESSION_STARTED        => 23,
     :SESSION_CLOSED => 24,
-    :IS_SESSION_ACTIVE => 24,
-    :SESSION_STATUS => 25,
-    :UNDEFINED => 26,
-    :UNRECOGNIZED_USER => 27
+    :IS_SESSION_ACTIVE      => 25,
+    :SESSION_STATUS => 26,
+    :STOCK_INFO     => 27,
+    :UNDEFINED      => 28,
+    :UNRECOGNIZED_USER => 29
 }
 
 class StockPacket
@@ -53,7 +54,7 @@ class StockPacketOut < StockPacket
   def push(type,val)
     case type
       when 'int' then
-        @bytearray += [val].pack('i>')
+        @bytearray += [val].pack('l>')
       when 'short' then
         @bytearray += [val].pack('s>')
       when 'string' then
@@ -85,7 +86,7 @@ class StockPacketIn < StockPacket
     retval = nil
     case type
       when 'int' then
-        retval = @bytearray[@offset..(@offset+3)].pack('c*').unpack('i>')[0]
+        retval = @bytearray[@offset..(@offset+3)].pack('c*').unpack('l>')[0]
         @offset += 4
       when 'short' then
         retval = @bytearray[@offset..(@offset+1)].pack('c*').unpack('s>')[0]
@@ -419,7 +420,15 @@ class GetStocks <StockPacketOut
   end
 end
 
-
+class StockInfo <StockPacketIn
+  attr_reader :stock_id, :amount
+  def initialize(bytestring)
+    super(bytestring)
+    @type     = self.pull('byte')
+    @stock_id = self.pull('int')
+    @amount   = self.pull('int')
+  end
+end
 
 class GetOrders <StockPacketOut
 
