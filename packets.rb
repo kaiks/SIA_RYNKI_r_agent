@@ -12,23 +12,26 @@ $packets = {
     :BEST_ORDER     => 10,
     :SUBSCRIBE_STOCK        => 11,
     :UNSUBSCRIBE_STOCK      => 12,
-    :SELL_STOCK_RESP        => 13,
-    :BUY_STOCK_RESP => 14,
-    :GET_STOCKS     => 15,
-    :LIST_OF_STOCKS => 16,
-    :CHANGE_PRICE   => 17,
-    :COMPANY_STATUS_REQ     => 18,
-    :COMPANY_ACTIVE_RESP    => 19,
-    :COMPANY_FROZEN_RESP    => 20,
-    :BUY_TRANSACTION        => 21,
-    :SELL_TRANSACTION       => 22,
-    :SESSION_STARTED        => 23,
-    :SESSION_CLOSED => 24,
-    :IS_SESSION_ACTIVE      => 25,
-    :SESSION_STATUS => 26,
-    :STOCK_INFO     => 27,
-    :UNDEFINED      => 28,
-    :UNRECOGNIZED_USER => 29
+    :GET_MY_STOCKS  => 13,
+    :GET_MY_STOCKS_RESP     => 14,
+    :GET_MY_ORDERS  => 15,
+    :GET_MY_ORDERS_RESP     => 16,
+    :SELL_STOCK_RESP        => 17,
+    :BUY_STOCK_RESP => 18,
+    :GET_STOCKS     => 19,
+    :LIST_OF_STOCKS => 20,
+    :CHANGE_PRICE   => 21,
+    :COMPANY_STATUS_REQ     => 22,
+    :COMPANY_ACTIVE_RESP    => 23,
+    :COMPANY_FROZEN_RESP    => 24,
+    :BUY_TRANSACTION        => 25,
+    :SELL_TRANSACTION       => 26,
+    :SESSION_STARTED        => 27,
+    :SESSION_CLOSED => 28,
+    :IS_SESSION_ACTIVE      => 29,
+    :SESSION_STATUS => 30,
+    :UNDEFINED      => 31,
+    :UNRECOGNIZED_USER => 32
 }
 
 class StockPacket
@@ -420,6 +423,7 @@ class GetStocks <StockPacketOut
   end
 end
 
+
 class StockInfo <StockPacketIn
   attr_reader :stock_id, :amount
   def initialize(bytestring)
@@ -429,13 +433,48 @@ class StockInfo <StockPacketIn
   end
 end
 
-class GetOrders <StockPacketOut
+
+class GetMyOrders <StockPacketOut
 
   def initialize
-    super($packets[:GET_ORDERS])
+    super($packets[:GET_MY_ORDERS])
   end
 
   def forge
     self.forge_final
+  end
+end
+
+class GetMyStocks <StockPacketOut
+  def initialize
+    super($packets[:GET_MY_STOCKS])
+  end
+
+  def forge
+    self.forge_final
+  end
+end
+
+class GetMyStocksResp <StockPacketIn
+  attr_reader :stockhash
+  def initialize(bytestring)
+    super(bytestring)
+    @stock_count = self.pull('int')
+    @stockhash = {}
+    @stock_count.times do |i|
+      @stockhash[self.pull('int')] = [self.pull('int')]
+    end
+  end
+end
+
+class GetMyOrdersResp <StockPacketIn
+  attr_reader :orderlist
+  def initialize(bytestring)
+    super(bytestring)
+    @order_count = self.pull('int')
+    @orderlist = []
+    @order_count.times do |i|
+      @orderlist[i] = [self.pull('byte'),self.pull('int'),self.pull('int'),self.pull('int')]
+    end
   end
 end

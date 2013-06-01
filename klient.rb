@@ -11,6 +11,7 @@ class SClient < EventMachine::Connection
     @password = password
     @buffer = ''
     @my_stocks = {}
+    @my_orders = []
   end
 
   def post_init
@@ -86,7 +87,19 @@ class SClient < EventMachine::Connection
           packet = StockInfo.new(packet.get)
           @my_stocks[packet.stock_id] = packet.amount
           say "My stock info: #{packet.packetlen} #{packet.stock_id} #{packet.amount}"
-          EventMachine.defer proc { on_best_order packet }
+          EventMachine.defer proc { on_stock_info packet }
+
+        when $packets[:GET_MY_STOCKS_RESP] then
+          packet = GetMyStocksResp.new(packet.get)
+          packet.stockhash.each{ |k,v| @my_stocks[k] = v }
+          say "Received my stocks info"
+          EventMachine.defer proc { on_get_my_stocks_resp packet }
+
+        when $packets[:GET_MY_ORDERS_RESP] then
+          packet = GetMyOrdersResp.new(packet.get)
+          @my_orders += packet.orderlist
+          say "Received my orders info"
+          EventMachine.defer proc { on_get_my_orders_resp packet }
 
         else
           say "Unknown packet: #{packet.id} #{packet.bytearray}"
@@ -128,6 +141,14 @@ class SClient < EventMachine::Connection
   end
 
   def on_best_order packet
+
+  end
+
+  def on_get_my_stocks_resp packet
+
+  end
+
+  def on_get_my_orders_resp packet
 
   end
 
