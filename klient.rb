@@ -41,6 +41,12 @@ class SClient < EventMachine::Connection
       end
       #puts "Packet stuff #{@buffer.unpack('C*')}"
       packet = StockPacketIn.new(@buffer)
+
+      #zabezpieczenie przed fragmentacja
+      if packet.packetlen+2 > @buffer.length
+        break
+      end
+
       @buffer = @buffer[(2+packet.packetlen)..@buffer.length]
       case packet.id
         when $packets[:REGISTER_USER_RESP_OK] then
@@ -87,13 +93,16 @@ class SClient < EventMachine::Connection
         when $packets[:BEST_ORDER] then
           packet = BestOrder.new(packet.get)
           say "New best order: #{packet.type} #{packet.stock_id} #{packet.amount} #{packet.price}"
-          EventMachine.defer proc { on_best_order packet }
+          say "It's class is #{packet.class}"
+          self.on_best_order packet
 
         when $packets[:GET_MY_STOCKS_RESP] then
           packet = GetMyStocksResp.new(packet.get)
           @my_stocks = packet.stockhash
-          say "Received my stocks info"
-          EventMachine.defer proc { on_get_my_stocks_resp packet }
+          @my_stocks
+          say "Received my stocks info #{@my_stocks}"
+          on_get_my_stocks_resp(packet)
+          #EventMachine.defer proc { on_get_my_stocks_resp packet }
 
         when $packets[:GET_MY_ORDERS_RESP] then
           packet = GetMyOrdersResp.new(packet.get)

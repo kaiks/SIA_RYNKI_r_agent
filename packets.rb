@@ -471,7 +471,7 @@ class GetMyOrdersResp <StockPacketIn
     @order_count = self.pull('int')
     @orderlist = []
     @order_count.times do |i|
-      @orderlist[i] = [self.pull('byte'),self.pull('int'),self.pull('int'),self.pull('int')]
+      @orderlist[i] = [self.pull('byte'),self.pull('int'),self.pull('int'),self.pull('int'),self.pull('int')]
     end
   end
 end

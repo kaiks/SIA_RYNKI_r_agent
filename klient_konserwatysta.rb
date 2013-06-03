@@ -4,7 +4,7 @@ class DumbClient < SClient
   def initialize(password=nil, user_id=0)
     super(password,user_id)
     @panic_thread = nil
-    @selling_price = -1
+    @selling_price = {}
   end
 
   def on_register_user_resp_ok packet
@@ -39,11 +39,11 @@ class DumbClient < SClient
   end
 
   def on_order packet
-
+     #GetMyStocks.new.forge
   end
 
   def on_best_order packet
-    send_data GetStockInfo.new(packet.stock_id)
+    send_data GetStockInfo.new(packet.stock_id).forge
   end
 
   def on_get_my_stocks_resp packet
@@ -58,17 +58,27 @@ class DumbClient < SClient
 
   def on_get_my_orders_resp packet
     say "My orders: #{@my_orders.to_s}"
+    @my_orders.each do |order|
+      if order[0]==2 || order[0]=='2'
+        @selling_price[order[2]] = (1.1*order[4]).to_i
+        say "Hey, let's get more of #{order[2]}"
+        get_more_stock(order[2])
+      end
+    end
     #@my_orders.each{|order| say order.to_s }
   end
 
   def on_get_stock_info_resp packet
-    while !packet.instance_of? GetStockInfoResp #lol
-      sleep(0.1)
-    end
+    #while !packet.instance_of? GetStockInfoResp #lol
+    #  sleep(0.1)
+    #end
     say "Stock info: #{packet.inspect}"
     @stock_info[packet.stock_id] = [packet.buy_price, packet.buy_amount,
                                     packet.sell_price, packet.sell_amount,
                                     packet.transaction_price, packet.transaction_amount]
+
+    fix_selling_price(packet.stock_id, @stock_info[packet.stock_id][0] )
+
     sell_stock_all(packet.stock_id, (packet.sell_price*1.1).to_i ) #10% trzeba ugrac!
   end
 
@@ -80,25 +90,34 @@ class DumbClient < SClient
     end
   end
 
+  def fix_selling_price(stock_id,price)
+    if @selling_price.has_key? stock_id
+      return
+    else
+      @selling_price[stock_id] = price
+    end
+  end
+
   def sell_stock_all(stock_id, price)
     amount = self.stock_amount stock_id
 
     if amount > 0
-      @selling_price = price
+      @selling_price[stock_id] = price
       say "Selling all my stock /#{stock_id}/ FOR #{price}"
       send_data SellStockReq.new(stock_id, amount, price).forge
     else
-      say 'Oops! Tried to sell all my stocks, but I have none.'
+      say "Oops! Tried to sell all my stocks #{stock_id} for #{price}, but I have none."
     end
 
-    if @selling_price < @stock_info[stock_id][0]
+    if @selling_price[stock_id] < @stock_info[stock_id][0]
       get_more_stock(stock_id)
     end
 
   end
 
   def get_more_stock(stock_id)
-    if stock_amount(1) >= @stock_info[stock_id][0]
+    say "Trying to get more of #{stock_id}"
+    if stock_amount(1) >= @selling_price[stock_id]
       say "Buying stock /#{stock_id}/, all in!"
       send_data BuyStockReq.new(stock_id, (stock_amount(1)/@stock_info[stock_id][0]).to_i, @stock_info[stock_id][0]).forge
       @my_stocks[1] -= (stock_amount(1)/@stock_info[stock_id][0]).to_i
@@ -109,7 +128,7 @@ class DumbClient < SClient
 end
 
 EventMachine.run {
-  50.times { |i|
+  15.times { |i|
     EventMachine.connect '127.0.0.1', 12345, DumbClient, '%06d' %(i+2), i+2
   }
 }
