@@ -6,12 +6,13 @@ require 'packets.rb'
 require 'csvreader.rb'
 
 class SClient < EventMachine::Connection
-  def initialize(password=nil,user_id=0)
+  def initialize(password=nil, user_id=0)
     @id = user_id
     @password = password
     @buffer = ''
     @my_stocks = {}
     @my_orders = []
+    @stock_info = {}
   end
 
   def post_init
@@ -20,7 +21,7 @@ class SClient < EventMachine::Connection
     if @id == 0
       send_data RegisterUserReq.new(@password).forge
     else
-      send_data LoginUserReq.new(@id,@password).forge
+      send_data LoginUserReq.new(@id, @password).forge
     end
   end
 
@@ -29,11 +30,16 @@ class SClient < EventMachine::Connection
   end
 
   def receive_data(data)
-    @buffer += data||''
+    if @buffer.nil?
+      @buffer = data.to_s
+    else
+      @buffer += data.to_s
+    end
     while !@buffer.nil? do
       if @buffer.length<2
         break
       end
+      #puts "Packet stuff #{@buffer.unpack('C*')}"
       packet = StockPacketIn.new(@buffer)
       @buffer = @buffer[(2+packet.packetlen)..@buffer.length]
       case packet.id
@@ -41,7 +47,7 @@ class SClient < EventMachine::Connection
           packet = RegisterUserRespOk.new(packet.get)
           @id = packet.user_id
           say "Registered: #{packet.user_id}"
-          send_data LoginUserReq.new(@id,@password).forge
+          send_data LoginUserReq.new(@id, @password).forge
           EventMachine.defer proc { on_register_user_resp_ok packet }
 
         when $packets[:REGISTER_USER_RESP_FAIL] then
@@ -69,7 +75,7 @@ class SClient < EventMachine::Connection
           EventMachine.defer proc { on_buy_transaction packet }
 
         when $packets[:TRANSACTION_CHANGE] then
-          packet = TransactionChange(packet.get)
+          packet = TransactionChange.new(packet.get)
           say "Transaction: #{packet.stock_id} #{packet.amount} #{packet.price} #{packet.date}"
           EventMachine.defer proc { on_transaction_change packet }
 
@@ -83,23 +89,22 @@ class SClient < EventMachine::Connection
           say "New best order: #{packet.type} #{packet.stock_id} #{packet.amount} #{packet.price}"
           EventMachine.defer proc { on_best_order packet }
 
-        when $packets[:STOCK_INFO] then
-          packet = StockInfo.new(packet.get)
-          @my_stocks[packet.stock_id] = packet.amount
-          say "My stock info: #{packet.packetlen} #{packet.stock_id} #{packet.amount}"
-          EventMachine.defer proc { on_stock_info packet }
-
         when $packets[:GET_MY_STOCKS_RESP] then
           packet = GetMyStocksResp.new(packet.get)
-          packet.stockhash.each{ |k,v| @my_stocks[k] = v }
+          @my_stocks = packet.stockhash
           say "Received my stocks info"
           EventMachine.defer proc { on_get_my_stocks_resp packet }
 
         when $packets[:GET_MY_ORDERS_RESP] then
           packet = GetMyOrdersResp.new(packet.get)
-          @my_orders += packet.orderlist
+          @my_orders = packet.orderlist
           say "Received my orders info"
           EventMachine.defer proc { on_get_my_orders_resp packet }
+
+        when $packets[:GET_STOCK_INFO_RESP] then
+          packet = GetStockInfoResp.new(packet.get)
+          say "Received stock info"
+          EventMachine.defer proc { on_get_stock_info_resp packet }
 
         else
           say "Unknown packet: #{packet.id} #{packet.bytearray}"
@@ -149,6 +154,10 @@ class SClient < EventMachine::Connection
   end
 
   def on_get_my_orders_resp packet
+
+  end
+
+  def on_get_stock_info_resp packet
 
   end
 

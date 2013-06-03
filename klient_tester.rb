@@ -13,8 +13,8 @@ class BossClient < SClient
   end
 
   def on_login_user_resp_ok packet
-    send_data GetMyStocks.new.forge
-    send_data GetMyOrders.new.forge
+    send_data GetStockInfo.new(3).forge
+    #send_data GetMyOrders.new.forge
   end
 
   def on_login_user_resp_fail packet
@@ -49,6 +49,10 @@ class BossClient < SClient
   def on_get_my_orders_resp packet
     say "My orders:"
     @my_orders.each{|order| say order.to_s }
+  end
+
+  def on_get_stock_info_resp packet
+    say "Stock info: #{packet.inspect}"
   end
 end
 

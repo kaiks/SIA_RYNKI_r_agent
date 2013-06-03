@@ -19,14 +19,16 @@ $packets = {
     :GET_MY_STOCKS_RESP     => 30,
     :GET_MY_ORDERS  => 31,
     :GET_MY_ORDERS_RESP     => 32,
+    :GET_STOCK_INFO => 33,
+    :GET_STOCK_INFO_RESP    => 34,
     :COMPANY_STATUS_REQ     => 40,
     :COMPANY_ACTIVE_RESP    => 41,
     :COMPANY_FROZEN_RESP    => 42,
     :SESSION_STARTED        => 43,
     :SESSION_CLOSED => 44,
     :IS_SESSION_ACTIVE      => 45,
-    :SESSION_STATUS => 46,
-    :UNDEFINED => 100
+    :SESSION_STATUS     => 46,
+    :UNDEFINED        => 100
 }
 
 class StockPacket
@@ -305,7 +307,7 @@ class TransactionChange <StockPacketIn
     @stock_id = self.pull('int')
     @amount   = self.pull('int')
     @price    = self.pull('int')
-    @date     = self.pull_len(self.pull('short'),'string')
+    @date     = self.pull_len('string',self.pull('short'))
   end
 end
 
@@ -457,7 +459,7 @@ class GetMyStocksResp <StockPacketIn
     @stock_count = self.pull('int')
     @stockhash = {}
     @stock_count.times do |i|
-      @stockhash[self.pull('int')] = [self.pull('int')]
+      @stockhash[self.pull('int')] = self.pull('int')
     end
   end
 end
@@ -471,5 +473,35 @@ class GetMyOrdersResp <StockPacketIn
     @order_count.times do |i|
       @orderlist[i] = [self.pull('byte'),self.pull('int'),self.pull('int'),self.pull('int')]
     end
+  end
+end
+
+
+class GetStockInfo <StockPacketOut
+  attr_reader :stock_id
+  def initialize(stock_id)
+    super($packets[:GET_STOCK_INFO])
+    @stock_id = stock_id
+  end
+  def forge
+    self.push('int',@stock_id)
+    self.forge_final
+  end
+end
+
+class GetStockInfoResp <StockPacketIn
+  attr_reader :stock_id, :buy_price,  :buy_amount,
+                         :sell_price, :sell_amount,
+                         :transaction_price, :transaction_amount
+
+  def initialize(bytestring)
+    super(bytestring)
+    @stock_id = self.pull('int')
+    @buy_price = self.pull('int')
+    @buy_amount = self.pull('int')
+    @sell_price = self.pull('int')
+    @sell_amount = self.pull('int')
+    @transaction_price = self.pull('int')
+    @transaction_amount = self.pull('int')
   end
 end
