@@ -21,14 +21,15 @@ $packets = {
     :GET_MY_ORDERS_RESP     => 32,
     :GET_STOCK_INFO => 33,
     :GET_STOCK_INFO_RESP    => 34,
+    :CANCEL_ORDER_REQ       => 35,
     :COMPANY_STATUS_REQ     => 40,
     :COMPANY_ACTIVE_RESP    => 41,
     :COMPANY_FROZEN_RESP    => 42,
     :SESSION_STARTED        => 43,
     :SESSION_CLOSED => 44,
     :IS_SESSION_ACTIVE      => 45,
-    :SESSION_STATUS     => 46,
-    :UNDEFINED        => 100
+    :SESSION_STATUS => 46,
+    :UNDEFINED            => 100
 }
 
 class StockPacket
@@ -470,8 +471,10 @@ class GetMyOrdersResp <StockPacketIn
     super(bytestring)
     @order_count = self.pull('int')
     @orderlist = []
+    #puts "Parsing... #{@order_count} items"
     @order_count.times do |i|
-      @orderlist[i] = [self.pull('byte'),self.pull('int'),self.pull('int'),self.pull('int'),self.pull('int')]
+      order = []
+      @orderlist += [[self.pull('byte'),self.pull('int'),self.pull('int'),self.pull('int'),self.pull('int')]]
     end
   end
 end
@@ -503,5 +506,18 @@ class GetStockInfoResp <StockPacketIn
     @sell_amount = self.pull('int')
     @transaction_price = self.pull('int')
     @transaction_amount = self.pull('int')
+  end
+end
+
+class CancelOrderReq <StockPacketOut
+  attr_accessor :order_id
+  def initialize(order_id)
+    super($packets[:CANCEL_ORDER_REQ])
+    @order_id = order_id
+  end
+
+  def forge
+    self.push('int',@order_id)
+    self.forge_final
   end
 end

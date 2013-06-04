@@ -57,7 +57,7 @@ class BossClient < SClient
       order = SellStockReq.new
       #say "Trying to sell #{stock['id_zasobu']} #{stock}"
       order.stock_id = stock['id_zasobu']
-      order.amount = 1000
+      order.amount = 500
       order.price = stock['cena']+5
       #puts "!! #{order.forge.unpack('C*')}"
       send_data order.forge

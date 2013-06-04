@@ -12,7 +12,6 @@ class SClient < EventMachine::Connection
     @buffer = ''
     @my_stocks = {}
     @my_orders = []
-    @stock_info = {}
   end
 
   def post_init
@@ -23,6 +22,7 @@ class SClient < EventMachine::Connection
     else
       send_data LoginUserReq.new(@id, @password).forge
     end
+    EventMachine.add_periodic_timer(5) { say "#{Time.now} #{@my_stocks.to_s}"}
   end
 
   def cash
@@ -40,7 +40,7 @@ class SClient < EventMachine::Connection
         break
       end
       #puts "Packet stuff #{@buffer.unpack('C*')}"
-      packet = StockPacketIn.new(@buffer)
+      packet = StockPacketIn.new(@buffer[0..2048])
 
       #zabezpieczenie przed fragmentacja
       if packet.packetlen+2 > @buffer.length
@@ -93,7 +93,7 @@ class SClient < EventMachine::Connection
         when $packets[:BEST_ORDER] then
           packet = BestOrder.new(packet.get)
           say "New best order: #{packet.type} #{packet.stock_id} #{packet.amount} #{packet.price}"
-          say "It's class is #{packet.class}"
+          #say "It's class is #{packet.class}"
           self.on_best_order packet
 
         when $packets[:GET_MY_STOCKS_RESP] then
@@ -102,7 +102,7 @@ class SClient < EventMachine::Connection
           @my_stocks
           say "Received my stocks info #{@my_stocks}"
           on_get_my_stocks_resp(packet)
-          #EventMachine.defer proc { on_get_my_stocks_resp packet }
+        #EventMachine.defer proc { on_get_my_stocks_resp packet }
 
         when $packets[:GET_MY_ORDERS_RESP] then
           packet = GetMyOrdersResp.new(packet.get)
@@ -113,7 +113,7 @@ class SClient < EventMachine::Connection
         when $packets[:GET_STOCK_INFO_RESP] then
           packet = GetStockInfoResp.new(packet.get)
           say "Received stock info"
-          EventMachine.defer proc { on_get_stock_info_resp packet }
+          on_get_stock_info_resp packet
 
         else
           say "Unknown packet: #{packet.id} #{packet.bytearray}"
@@ -173,6 +173,46 @@ class SClient < EventMachine::Connection
 
   def say something
     puts "[#{@id}]: #{something}"
+  end
+
+  def stock_amount stock_id
+    if @my_stocks.has_key? stock_id
+      @my_stocks[stock_id]
+    else
+      0
+    end
+  end
+
+  def sell(stock_id, amount, price)
+    say "Let's sell #{stock_id}"
+    if amount == 0
+      say 'I\'m not going to sell 0 stocks.'
+      return
+    end
+    if stock_amount(stock_id) < amount
+      say "Can't sell #{amount} of #{stock_id}. I've got only #{@my_stocks[stock_id]}!"
+      return
+    end
+    if @my_stocks.has_key? stock_id
+      @my_stocks[stock_id] -= amount
+    end
+
+    say "Selling: stock=#{stock_id} #{amount} for #{price}"
+    send_data SellStockReq.new(stock_id, amount, price).forge
+  end
+
+  def buy(stock_id, amount, price)
+    if amount == 0
+      say 'I\'m not going to buy 0 stocks.'
+      return
+    end
+    if @my_stocks[1] < price*amount
+      say "Can't buy #{amount} of #{stock_id} for total of #{price*amount}. I've got only #{@my_stocks[1]} cash!"
+      return
+    end
+    @my_stocks[1] -= price*amount
+    say "Buying: stock=#{stock_id} #{amount} for #{price}"
+    send_data BuyStockReq.new(stock_id, amount, price).forge
   end
 end
 
