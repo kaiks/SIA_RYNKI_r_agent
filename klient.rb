@@ -40,7 +40,7 @@ class SClient < EventMachine::Connection
         break
       end
       #puts "Packet stuff #{@buffer.unpack('C*')}"
-      packet = StockPacketIn.new(@buffer[0..2048])
+      packet = StockPacketIn.new(@buffer[0..32768])
 
       #zabezpieczenie przed fragmentacja
       if packet.packetlen+2 > @buffer.length
@@ -116,7 +116,7 @@ class SClient < EventMachine::Connection
           on_get_stock_info_resp packet
 
         else
-          say "Unknown packet: #{packet.id} #{packet.bytearray}"
+          say "#{Time.now} Unknown packet: #{packet.id} #{packet.bytearray}"
 
       end
     end
@@ -172,7 +172,7 @@ class SClient < EventMachine::Connection
 
 
   def say something
-    puts "[#{@id}]: #{something}"
+    puts "#{Time.now} [#{@id}]: #{something}"
   end
 
   def stock_amount stock_id
@@ -184,8 +184,8 @@ class SClient < EventMachine::Connection
   end
 
   def sell(stock_id, amount, price)
-    say "Let's sell #{stock_id}"
-    if amount == 0
+    say "Let's sell #{amount} of #{stock_id} for #{price}"
+    if amount == 0 || price == 0
       say 'I\'m not going to sell 0 stocks.'
       return
     end
@@ -202,7 +202,8 @@ class SClient < EventMachine::Connection
   end
 
   def buy(stock_id, amount, price)
-    if amount == 0
+    say "Let's buy #{amount} of #{stock_id} for #{price}"
+    if amount == 0 || price == 0
       say 'I\'m not going to buy 0 stocks.'
       return
     end
@@ -213,6 +214,16 @@ class SClient < EventMachine::Connection
     @my_stocks[1] -= price*amount
     say "Buying: stock=#{stock_id} #{amount} for #{price}"
     send_data BuyStockReq.new(stock_id, amount, price).forge
+  end
+
+  def cancel_order(id)
+    say "Cancel order #{id}"
+    send_data CancelOrderReq.new(id).forge
+  end
+
+  def timer(sec, &block)
+    say "Thread creation"
+    Thread.new { sleep(sec); say "Thread execution"; block.call }.join
   end
 end
 

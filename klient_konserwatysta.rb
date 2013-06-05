@@ -16,8 +16,10 @@ class DumbClient < SClient
   end
 
   def on_login_user_resp_ok packet
-    send_data GetMyStocks.new.forge
-    send_data GetMyOrders.new.forge
+    EM.add_periodic_timer(rand(10)+10) {
+      send_data GetMyStocks.new.forge
+      send_data GetMyOrders.new.forge
+    }
     #send_data GetMyOrders.new.forge
   end
 
@@ -62,27 +64,44 @@ class DumbClient < SClient
   def on_get_my_orders_resp packet
     say "My orders: #{@my_orders.to_s}"
     @my_orders.each do |order|
-      say "Now doing order #{order.to_s}"
+      #say "Now doing order #{order.to_s}"
+      send_data GetStockInfo.new(order[2]).forge
+      fix_selling_price(order[2],(1.1*order[4]).to_i)
       if order[0]==2 || order[0]=='2'
-        send_data GetStockInfo.new(order[2]).forge
-        fix_selling_price(order[2],(1.1*order[4]).to_i)
-        say "Hey, let's get more of #{order[2]}"
-        EventMachine.add_timer(30) { panic_sell(order) }
-        EventMachine.add_timer(rand(5)+1) { get_more_stock(order[2]) }
+        timer(1.0*rand(200)/20) {
+          cancel_order(order[1])
+          sleep(1)
+          panic_sell(order[2])
+        }
+
+        timer(rand(5)+1) {
+          say "Hey, let's get more of #{order[2]}"; get_more_stock(order[2])
+        }
+      end
+
+      if order[0]==1 || order[0]=='1'
+        timer(1.0*rand(200)/20) {
+          cancel_order(order[1])
+          sleep(1)
+          get_more_stock(order[2],true)
+        }
+        timer(rand(5)+1) {
+          say "Hey, let's get more of #{order[2]}"; get_more_stock(order[2])
+        }
       end
     end
     #@my_orders.each{|order| say order.to_s }
   end
 
   def on_get_stock_info_resp packet
-    say "Stock info: #{packet.inspect}"
+    say "Stock info: #{packet.to_s}"
     @stock_info[packet.stock_id] = [packet.buy_price, packet.buy_amount,
                                     packet.sell_price, packet.sell_amount,
                                     packet.transaction_price, packet.transaction_amount]
 
     fix_selling_price(packet.stock_id, @stock_info[packet.stock_id][0] )
 
-    EventMachine.add_timer(rand(5)+1) {
+    timer(rand(5)+1) {
       sell_stock_all(packet.stock_id, fix_selling_price(packet.stock_id,packet.sell_price*1.1) ) #10% trzeba ugrac!
     }
   end
@@ -90,7 +109,7 @@ class DumbClient < SClient
 
   def fix_selling_price(stock_id,price)
     if @selling_price.has_key? stock_id
-      return @selling_price[stock_id]
+      @selling_price[stock_id]
     else
       @selling_price[stock_id] = price.to_i
     end
@@ -98,39 +117,48 @@ class DumbClient < SClient
 
   def sell_stock_all(stock_id, price, pkc=false)
     amount = self.stock_amount stock_id
-    selling_for = fix_selling_price(stock_id,price)
+    selling_price= fix_selling_price(stock_id,price)
 
-    if pkc==true
-      selling_for=1
+    if pkc
+      say 'PKC sell'
+      selling_price=1
     end
 
-    sell(stock_id,amount, selling_for )
+    sell(stock_id,amount, selling_price)
 
     get_more_stock(stock_id)
 
   end
 
-  def get_more_stock(stock_id)
+  def get_more_stock(stock_id,pkc=false)
     say "Trying to get more of #{stock_id}"
+    buying_price = @selling_price[stock_id]*0.95
+    if pkc
+      say 'PKC buy'
+      buying_price *= 2
+    end
     if stock_amount(1) >= @selling_price[stock_id]
-      buy(stock_id,(stock_amount(1)/@selling_price[stock_id]*0.95).to_i,(@selling_price[stock_id]*0.95).to_i)
+      buy(stock_id,(stock_amount(1)/buying_price).to_i,(buying_price).to_i)
     else
       say 'Wanted to buy but no dice'
     end
   end
 
-  def panic_sell(order)
-    send_data CancelOrderReq.new(order[1]).forge
+  def panic_sell(stock_id)
     send_data GetMyStocks.new.forge
-    @selling_price[order[2]] *= 0.9
-    EventMachine.add_timer(rand(5)+1) {
-      sell_stock_all(order[2],@selling_price[order[2]],true)
+    @selling_price[stock_id] *= 0.9
+    timer(rand(5)+1) {
+      sell_stock_all(stock_id,@selling_price[stock_id],true)
     }
   end
+
+
 end
 
 EventMachine.run {
-  20.times { |i|
-    EventMachine.connect '127.0.0.1', 12345, DumbClient, '%06d' %(i+2), i+2
+  80.times { |i|
+    EM.add_timer (1.0*rand(100)/10.0) {
+      EventMachine.connect '127.0.0.1', 12345, DumbClient, '%06d' %(i+2), i+2
+    }
   }
 }

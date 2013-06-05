@@ -80,6 +80,7 @@ class StockPacketIn < StockPacket
     @bytearray  = bytestring.unpack('c*')
     @offset     = 0
     @packetlen  = self.pull('short')
+    @bytearray = @bytearray[0..(@packetlen+2)]
     @id         = self.pull('byte')
   end
 
@@ -506,6 +507,10 @@ class GetStockInfoResp <StockPacketIn
     @sell_amount = self.pull('int')
     @transaction_price = self.pull('int')
     @transaction_amount = self.pull('int')
+  end
+
+  def to_s
+    "#Stock info: stock={@stock_id} | buy order: p=#{@buy_price}, a=#{@buy_amount} | sell order: p=#{@sell_price}, a=#{@sell_amount} transaction: p=#{@transaction_price}, a=#{@transaction_amount}"
   end
 end
 
