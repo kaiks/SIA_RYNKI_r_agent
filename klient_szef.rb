@@ -46,9 +46,9 @@ class BossClient < SClient
       order = BuyStockReq.new
       #say "Trying to buy #{stock['id_zasobu']} #{stock}"
       order.stock_id = stock['id_zasobu']
-      order.amount = 1000
+      order.amount = 300
       order.price = stock['cena']-5
-      send_data order.forge
+      send order.forge
     }
   end
 
@@ -57,14 +57,16 @@ class BossClient < SClient
       order = SellStockReq.new
       #say "Trying to sell #{stock['id_zasobu']} #{stock}"
       order.stock_id = stock['id_zasobu']
-      order.amount = 500
+      order.amount = 300
       order.price = stock['cena']+5
       #puts "!! #{order.forge.unpack('C*')}"
-      send_data order.forge
+      send order.forge
     }
   end
 end
 
-EventMachine.run {
-  EventMachine.connect '127.0.0.1', 12345, BossClient, 'abcdef', 1
+t= Thread.new {
+  BossClient.new('abcdef',1)
 }
+sleep(1000000000000000)
+t.join

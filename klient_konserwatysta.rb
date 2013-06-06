@@ -1,4 +1,4 @@
-require 'klient.rb'
+require './klient.rb'
 
 class DumbClient < SClient
   def initialize(password=nil, user_id=0)
@@ -16,11 +16,13 @@ class DumbClient < SClient
   end
 
   def on_login_user_resp_ok packet
-    EM.add_periodic_timer(rand(10)+10) {
-      send_data GetMyStocks.new.forge
-      send_data GetMyOrders.new.forge
+    @threads << Thread.new{
+      loop {
+      sleep(rand(10)+10)
+      send GetMyStocks.new.forge
+      send GetMyOrders.new.forge
+      }
     }
-    #send_data GetMyOrders.new.forge
   end
 
   def on_login_user_resp_fail packet
@@ -29,14 +31,14 @@ class DumbClient < SClient
 
   def on_sell_transaction packet
     say 'Ka ching! (sold stuff)'
-    send_data GetMyStocks.new.forge
-    send_data GetMyOrders.new.forge
+    send GetMyStocks.new.forge
+    send GetMyOrders.new.forge
   end
 
   def on_buy_transaction packet
     say 'Ka ching! (bought stuff)'
-    send_data GetMyStocks.new.forge
-    send_data GetMyOrders.new.forge
+    send GetMyStocks.new.forge
+    send GetMyOrders.new.forge
   end
 
   def on_transaction_change packet
@@ -48,15 +50,15 @@ class DumbClient < SClient
   end
 
   def on_best_order packet
-    send_data GetStockInfo.new(packet.stock_id).forge
+    send GetStockInfo.new(packet.stock_id).forge
   end
 
   def on_get_my_stocks_resp packet
     say "My stocks: #{@my_stocks.to_s}"
     @my_stocks.each_key{ |k|
       if k > 1
-        send_data GetStockInfo.new(k).forge
-        send_data SubscribeStock.new(k).forge
+        send GetStockInfo.new(k).forge
+        send SubscribeStock.new(k).forge
       end
     }
   end
@@ -65,7 +67,7 @@ class DumbClient < SClient
     say "My orders: #{@my_orders.to_s}"
     @my_orders.each do |order|
       #say "Now doing order #{order.to_s}"
-      send_data GetStockInfo.new(order[2]).forge
+      send GetStockInfo.new(order[2]).forge
       if order[0]==2 || order[0]=='2'
         @selling_price[order[2]] = order[4]
         timer(2+1.0*rand(200)/20) {
@@ -129,6 +131,8 @@ class DumbClient < SClient
       selling_price=1
     end
 
+    selling_price = [1,selling_price].max
+
     sell(stock_id,amount, selling_price)
 
     get_more_stock(stock_id)
@@ -150,7 +154,7 @@ class DumbClient < SClient
   end
 
   def panic_sell(stock_id)
-    send_data GetMyStocks.new.forge
+    send GetMyStocks.new.forge
     @selling_price[stock_id] *= 0.9
     timer(rand(5)+1) {
       sell_stock_all(stock_id,@selling_price[stock_id],true)
@@ -160,10 +164,15 @@ class DumbClient < SClient
 
 end
 
-EventMachine.run {
-  80.times { |i|
-    EM.add_timer (1.0*rand(100)/10.0) {
-      EventMachine.connect '127.0.0.1', 12345, DumbClient, '%06d' %(i+2), i+2
-    }
+@klienci = []
+#EventMachine.run {
+100.times { |i|
+  @klienci << Thread.new {
+    sleep(1.0*rand(1000)/10.0)
+    DumbClient.new('%06d' %(i+2), i+2)
+    #EventMachine.connect '127.0.0.1', 12345, DumbClient, '%06d' %(i+2), i+2
   }
 }
+@klienci.each {|thread| thread }
+#}
+sleep(1000000)
