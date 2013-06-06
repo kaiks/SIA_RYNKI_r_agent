@@ -19,6 +19,7 @@ class SClient
     @my_orders = []
     @socket = TCPSocket.new 'localhost', 12345
     @threads = []
+    @sendlock = Mutex.new
     post_init
     @threads << Thread.new { run }
   end
@@ -29,7 +30,7 @@ class SClient
 
   def post_init
     puts @password
-    puts @user_id
+    puts @id
     if @id == 0
       send RegisterUserReq.new(@password).forge
     else
@@ -66,7 +67,7 @@ class SClient
           packet = RegisterUserRespOk.new(packet.get)
           @id = packet.user_id
           say "Registered: #{packet.user_id}"
-          send_data LoginUserReq.new(@id, @password).forge
+          send LoginUserReq.new(@id, @password).forge
           on_register_user_resp_ok packet
 
         when $packets[:REGISTER_USER_RESP_FAIL] then
@@ -75,7 +76,7 @@ class SClient
           on_register_user_resp_fail packet
 
         when $packets[:LOGIN_USER_RESP_OK] then
-          say "Login OK"
+          say 'Login OK'
           on_login_user_resp_ok packet
 
         when $packets[:LOGIN_USER_RESP_FAIL] then
@@ -112,20 +113,19 @@ class SClient
         when $packets[:GET_MY_STOCKS_RESP] then
           packet = GetMyStocksResp.new(packet.get)
           @my_stocks = packet.stockhash
-          @my_stocks
-          say "Received my stocks info #{@my_stocks}"
+          say "Received my stocks info #{@my_stocks.to_s}"
           on_get_my_stocks_resp(packet)
         #EventMachine.defer proc { on_get_my_stocks_resp packet }
 
         when $packets[:GET_MY_ORDERS_RESP] then
           packet = GetMyOrdersResp.new(packet.get)
           @my_orders = packet.orderlist
-          say "Received my orders info"
+          say 'Received my orders info'
           on_get_my_orders_resp packet
 
         when $packets[:GET_STOCK_INFO_RESP] then
           packet = GetStockInfoResp.new(packet.get)
-          say "Received stock info"
+          say 'Received stock info'
           on_get_stock_info_resp packet
 
         else
@@ -184,24 +184,18 @@ class SClient
   end
 
   def send_data data
-    @socket.write data
+    @sendlock.synchronize {
+      @socket.write data
+    }
   end
 
   def send data
-    #if self.error?
-    #  say 'Hey, something\'s gone very wrong.'
-    #  socket.close
-    #else
-    if @socket.closed?
-      say 'socked closed!!'
-    end
     send_data(data)
-    #end
   end
 
 
   def say something
-    puts "#{Time.now} [#{@id}]: #{something}"
+    puts "#{Time.now} [#{@id.to_s}]: #{something}"
   end
 
   def stock_amount stock_id
@@ -251,14 +245,7 @@ class SClient
   end
 
   def timer(sec, &block)
-    say "Thread creation"
+    say 'Thread creation'
     Thread.new { sleep(sec); say 'Executing thread'; block.call }
   end
 end
-
-=begin
-EventMachine.run {
-  EventMachine.connect '127.0.0.1', 12345, Client,'abfdef',1
-  EventMachine.connect '127.0.0.1', 12345, Client,'qwerty',2
-}
-=end
