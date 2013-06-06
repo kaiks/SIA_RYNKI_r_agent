@@ -66,9 +66,9 @@ class DumbClient < SClient
     @my_orders.each do |order|
       #say "Now doing order #{order.to_s}"
       send_data GetStockInfo.new(order[2]).forge
-      fix_selling_price(order[2],(1.1*order[4]).to_i)
       if order[0]==2 || order[0]=='2'
-        timer(1.0*rand(200)/20) {
+        @selling_price[order[2]] = order[4]
+        timer(2+1.0*rand(200)/20) {
           cancel_order(order[1])
           sleep(1)
           panic_sell(order[2])
@@ -80,7 +80,8 @@ class DumbClient < SClient
       end
 
       if order[0]==1 || order[0]=='1'
-        timer(1.0*rand(200)/20) {
+        @selling_price[order[2]] = order[4]*1.1
+        timer(2+1.0*rand(200)/20) {
           cancel_order(order[1])
           sleep(1)
           get_more_stock(order[2],true)
@@ -111,6 +112,10 @@ class DumbClient < SClient
     if @selling_price.has_key? stock_id
       @selling_price[stock_id]
     else
+      if price.to_i==0
+        price = rand(10000)+1
+      end
+      puts "pt:#{price}"
       @selling_price[stock_id] = price.to_i
     end
   end
@@ -131,16 +136,16 @@ class DumbClient < SClient
   end
 
   def get_more_stock(stock_id,pkc=false)
-    say "Trying to get more of #{stock_id}"
+    say "Trying to get more of #{stock_id}. SP=#{@selling_price[stock_id]}"
     buying_price = @selling_price[stock_id]*0.95
     if pkc
       say 'PKC buy'
-      buying_price *= 2
+      buying_price = [2*buying_price,[buying_price, @my_stocks[1]].max].min
     end
-    if stock_amount(1) >= @selling_price[stock_id]
+    if stock_amount(1) >= buying_price
       buy(stock_id,(stock_amount(1)/buying_price).to_i,(buying_price).to_i)
     else
-      say 'Wanted to buy but no dice'
+      say "Wanted to buy but no dice. #{stock_amount(1)}<#{buying_price}"
     end
   end
 

@@ -510,7 +510,7 @@ class GetStockInfoResp <StockPacketIn
   end
 
   def to_s
-    "#Stock info: stock={@stock_id} | buy order: p=#{@buy_price}, a=#{@buy_amount} | sell order: p=#{@sell_price}, a=#{@sell_amount} transaction: p=#{@transaction_price}, a=#{@transaction_amount}"
+    "#Stock info: stock=#{@stock_id} | buy order: p=#{@buy_price}, a=#{@buy_amount} | sell order: p=#{@sell_price}, a=#{@sell_amount} transaction: p=#{@transaction_price}, a=#{@transaction_amount}"
   end
 end
 
