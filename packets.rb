@@ -423,16 +423,6 @@ class GetStocks <StockPacketOut
 end
 
 
-class StockInfo <StockPacketIn
-  attr_reader :stock_id, :amount
-  def initialize(bytestring)
-    super(bytestring)
-    @stock_id = self.pull('int')
-    @amount   = self.pull('int')
-  end
-end
-
-
 class GetMyOrders <StockPacketOut
 
   def initialize

@@ -5,9 +5,46 @@ require 'packets.rb'
 
 require 'csvreader.rb'
 require 'socket'
+require 'timeout'
+require 'worker.rb'
 
 $host = 'localhost'
 $port = 12345
+
+class StockInfo
+  attr_accessor :buy_price, :buy_amount, :sell_price, :sell_amount,
+                :transaction_price, :transaction_amount,
+                :i_bought_for, :i_sold_for, :initialized
+  def initialize
+    @initialized = false
+  end
+
+  def fromStockInfo packet
+    @buy_price  = packet.buy_price
+    @buy_amount = packet.buy_amount
+    @sell_price = packet.sell_price
+    @sell_amount = packet.sell_amount
+    @transaction_price = packet.transaction_price
+    @transaction_amount = packet.transaction_amount
+    @initialized = true
+  end
+
+  def fromBestOrder packet
+    if packet.type.to_i==1
+      @buy_price = packet.price
+      @buy_amount = packet.amount
+    else
+      @sell_price = packet.price
+      @buy_amount = packet.amount
+    end
+  end
+
+  def fromTransactionChange packet
+    @transaction_price = packet.price
+    @transaction_amount = packet.amount
+  end
+
+end
 
 class SClient
 
@@ -20,23 +57,27 @@ class SClient
     @socket = TCPSocket.new 'localhost', 12345
     @threads = []
     @sendlock = Mutex.new
+    @worker = Worker.new
     post_init
-    @threads << Thread.new { run }
   end
 
   def run
-    loop { receive_data @socket.readpartial(4096) }
+    loop {
+      data = @socket.readpartial(1024)
+      receive_data data if data.to_s.length>0
+    }
   end
 
   def post_init
-    puts @password
-    puts @id
+    @threads << Thread.new { run }
+
     if @id == 0
       send RegisterUserReq.new(@password).forge
     else
       send LoginUserReq.new(@id, @password).forge
     end
-    @threads << Thread.new{ loop{say "/loop/#{Time.now} #{@my_stocks.to_s}";sleep(5) } }
+
+    @threads << Thread.new{ loop{say "/loop/#{Time.now} #{@my_stocks.to_s}";sleep(5); send GetMyStocks.new.forge } }
   end
 
   def cash
@@ -44,24 +85,22 @@ class SClient
   end
 
   def receive_data(data)
-    if @buffer.nil?
-      @buffer = data.to_s
-    else
-      @buffer += data.to_s
-    end
-    while !@buffer.nil? do
-      if @buffer.length<2
-        break
-      end
-      #puts "Packet stuff #{@buffer.unpack('C*')}"
+    say "received data #{data.length}"
+#    @buffer ||= ''
+    @buffer += data.to_s
+
+    while @buffer.length > 2 do
       packet = StockPacketIn.new(@buffer[0..32768])
+      say "packet len #{packet.packetlen}"
 
       #zabezpieczenie przed fragmentacja
       if packet.packetlen+2 > @buffer.length
+        say 'Packet not long enough'
         break
       end
 
-      @buffer = @buffer[(2+packet.packetlen)..@buffer.length]
+      @buffer = @buffer[(2+packet.packetlen)..@buffer.length].to_s
+
       case packet.id
         when $packets[:REGISTER_USER_RESP_OK] then
           packet = RegisterUserRespOk.new(packet.get)
@@ -107,7 +146,6 @@ class SClient
         when $packets[:BEST_ORDER] then
           packet = BestOrder.new(packet.get)
           say "New best order: #{packet.type} #{packet.stock_id} #{packet.amount} #{packet.price}"
-          #say "It's class is #{packet.class}"
           self.on_best_order packet
 
         when $packets[:GET_MY_STOCKS_RESP] then
@@ -115,7 +153,6 @@ class SClient
           @my_stocks = packet.stockhash
           say "Received my stocks info #{@my_stocks.to_s}"
           on_get_my_stocks_resp(packet)
-        #EventMachine.defer proc { on_get_my_stocks_resp packet }
 
         when $packets[:GET_MY_ORDERS_RESP] then
           packet = GetMyOrdersResp.new(packet.get)
@@ -129,59 +166,12 @@ class SClient
           on_get_stock_info_resp packet
 
         else
-          say "#{Time.now} Unknown packet: #{packet.id} #{packet.bytearray}"
+          say "Unknown packet: #{packet.id} #{packet.bytearray}"
 
       end
     end
   end
 
-  def on_register_user_resp_ok packet
-
-  end
-
-  def on_register_user_resp_fail packet
-
-  end
-
-  def on_login_user_ok packet
-
-  end
-
-  def on_login_user_resp_fail packet
-
-  end
-
-  def on_sell_transaction packet
-
-  end
-
-  def on_buy_transaction packet
-
-  end
-
-  def on_transaction_change packet
-
-  end
-
-  def on_order packet
-
-  end
-
-  def on_best_order packet
-
-  end
-
-  def on_get_my_stocks_resp packet
-
-  end
-
-  def on_get_my_orders_resp packet
-
-  end
-
-  def on_get_stock_info_resp packet
-
-  end
 
   def send_data data
     @sendlock.synchronize {
@@ -248,4 +238,53 @@ class SClient
     say 'Thread creation'
     Thread.new { sleep(sec); say 'Executing thread'; block.call }
   end
+
+  def on_register_user_resp_ok packet
+
+  end
+
+  def on_register_user_resp_fail packet
+
+  end
+
+  def on_login_user_ok packet
+
+  end
+
+  def on_login_user_resp_fail packet
+
+  end
+
+  def on_sell_transaction packet
+
+  end
+
+  def on_buy_transaction packet
+
+  end
+
+  def on_transaction_change packet
+
+  end
+
+  def on_order packet
+
+  end
+
+  def on_best_order packet
+
+  end
+
+  def on_get_my_stocks_resp packet
+
+  end
+
+  def on_get_my_orders_resp packet
+
+  end
+
+  def on_get_stock_info_resp packet
+
+  end
+
 end
