@@ -54,12 +54,20 @@ class DumbClient < SClient
     say "My orders: #{@my_orders.to_s}"
     @my_orders.each do |order|
       #say "Now doing order #{order.to_s}"
+      if !@stock_info[order[2]].initialized
+        send GetStockInfo.new(order[2]).forge
+      end
+
       if order[0].to_i==2
         @stock_info[order[2]].i_sold_for = order[4]
-        timer(2+1.0*rand(200)/20) {
-          cancel_order(order[1])
-          panic_sell(order[2])
-        }
+
+        #moze nie chcemy az tak czesto panikowac...
+        if !rand(4)
+          timer(2+1.0*rand(200)/20) {
+            cancel_order(order[1])
+            panic_sell(order[2])
+          }
+        end
 
         timer(rand(5)+1) {
           say "Hey, let's get more of #{order[2]}"; get_more_stock(order[2])
@@ -67,16 +75,25 @@ class DumbClient < SClient
 
       elsif order[0].to_i==1
         @stock_info[order[2]].i_bought_for = order[4]
-        if order[3]>2
-          timer(2+1.0*rand(200)/20) {
-            cancel_order(order[1])
+
+        timer(2+1.0*rand(200)/20) {
+          cancel_order(order[1]) if order[3]>2
+          sleep(1)
+
+          randval = rand(4)
+          if randval>0
+            buy_for(order[2], 1.0*(10+rand(5))/10.0 * @stock_info[order[2].i_bought_for], 0.5)
+          else
             get_more_stock(order[2], true)
-          }
-        end
+          end
+        }
+      else
+        raise 'Wrong order type'
+
       end
     end
-
   end
+
 
   def on_get_stock_info_resp packet
     say "Stock info: #{packet.to_s}"
@@ -108,16 +125,15 @@ class DumbClient < SClient
 
 
   def sell_stock_all(stock_id, price, pkc=false)
+    say "Sell all: #{stock_id} #{price.to_i}"
     amount = self.stock_amount stock_id
     selling_price = [1, price].max
-
     if pkc
       say 'PKC sell'
       selling_price=1
     else
-      @stock_info[i_sold_for] = price
+      @stock_info[stock_id].i_sold_for = price
     end
-
     sell(stock_id, amount, selling_price)
   end
 
@@ -139,11 +155,12 @@ class DumbClient < SClient
       else
         say "Wanted to buy but no dice. #{stock_amount(1)}<#{buying_price}"
       end
+    else
+      say 'Can\'t get more stock. Uninitialized!'
     end
   end
 
   def panic_sell(stock_id)
-    send GetMyStocks.new.forge
     @stock_info[stock_id].i_sold_for *= 0.9
 
     timer(rand(5)+1) {
@@ -156,9 +173,9 @@ end
 
 @klienci = []
 
-1.times { |i|
+500.times { |i|
   @klienci << Thread.new {
-    #sleep(1.0*rand(1000)/10.0)
+    sleep(1.0*rand(1000)/10.0)
     DumbClient.new('%06d' %(i+2), i+2)
     #EventMachine.connect '127.0.0.1', 12345, DumbClient, '%06d' %(i+2), i+2
   }

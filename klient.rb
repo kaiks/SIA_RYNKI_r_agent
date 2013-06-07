@@ -26,6 +26,8 @@ class StockInfo
     @sell_amount = packet.sell_amount
     @transaction_price = packet.transaction_price
     @transaction_amount = packet.transaction_amount
+    @i_bought_for ||= (@sell_price).to_i
+    @i_sold_for  ||= (@i_bought_for*1.1).to_i
     @initialized = true
   end
 
@@ -77,7 +79,7 @@ class SClient
       send LoginUserReq.new(@id, @password).forge
     end
 
-    @threads << Thread.new{ loop{say "/loop/#{Time.now} #{@my_stocks.to_s}";sleep(5); send GetMyStocks.new.forge } }
+    @threads << Thread.new{ loop{say "/loop/#{Time.now} #{@my_stocks.to_s}";sleep(5) } }
   end
 
   def cash
@@ -206,9 +208,8 @@ class SClient
       say "Can't sell #{amount} of #{stock_id}. I've got only #{@my_stocks[stock_id]}!"
       return
     end
-    if @my_stocks.has_key? stock_id
-      @my_stocks[stock_id] -= amount
-    end
+
+    @my_stocks[stock_id] -= amount
 
     say "Selling: stock=#{stock_id} #{amount} for #{price}"
     send SellStockReq.new(stock_id, amount, price).forge
@@ -235,7 +236,7 @@ class SClient
   end
 
   def timer(sec, &block)
-    say 'Thread creation'
+    #say 'Thread creation'
     Thread.new { sleep(sec); say 'Executing thread'; block.call }
   end
 
