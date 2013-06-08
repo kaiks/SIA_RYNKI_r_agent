@@ -6,8 +6,8 @@ class DumbClient < SClient
     Thread.abort_on_exception=true
     say "rzyg"
     @panic_thread = nil
-    @stock_info = {}
-    $csv.each_key { |k| @stock_info[k] = StockInfo.new }
+    @stock = {}
+    $csv.each_key { |k| @stock[k] = StockInfo.new }
     @expected_gain = 0.05+1.0*rand(25)/100
     @expected_bargain = -(0.05+1.0*rand(25)/100)
     say "Expected gain: #{@expected_gain} bargain: #{@expected_bargain}"
@@ -42,7 +42,7 @@ class DumbClient < SClient
   end
 
   def on_transaction_change packet
-    @stock_info[packet.stock_id].fromTransactionChange packet
+    @stock[packet.stock_id].fromTransactionChange packet
   end
 
 
@@ -51,13 +51,13 @@ class DumbClient < SClient
     @my_stocks.each_key { |k|
       if k>1
         send GetStockInfo.new(k).forge
-        if @stock_info[k].initialized and @stock_info[k].i_sold_for.to_i > 0 and  @stock_info[k].i_bought_for.to_i > 0
-          say "SI ISF #{@stock_info[k].i_sold_for}"
-          say "SI IBF #{@stock_info[k].i_bought_for}"
+        if @stock[k].initialized and @stock[k].i_sold_for.to_i > 0 and  @stock[k].i_bought_for.to_i > 0
+          say "SI ISF #{@stock[k].i_sold_for}"
+          say "SI IBF #{@stock[k].i_bought_for}"
           timer(60) {
-            buy_for(k, @stock_info[k].i_sold_for, 0.5)
-            buy_for(k, 1.5*@stock_info[k].i_sold_for, 0.5)
-            sell_stock_all(k,@stock_info[k].i_bought_for)
+            buy_for(k, @stock[k].i_sold_for, 0.5)
+            buy_for(k, 1.5*@stock[k].i_sold_for, 0.5)
+            sell_stock_all(k,@stock[k].i_bought_for)
           }
         else
           send SubscribeStock.new(k).forge
@@ -76,35 +76,35 @@ class DumbClient < SClient
 
     establish_price=false
 
-    if @stock_info[packet.stock_id].initialized==false
+    if @stock[packet.stock_id].initialized==false
       say 'stock uninitialized'
       establish_price=true
     end
 
-    @stock_info[packet.stock_id].fromStockInfo packet
+    @stock[packet.stock_id].fromStockInfo packet
 
-    if establish_price==true or @stock_info[packet.stock_id].i_sold_for.to_i == 0 or @stock_info[packet.stock_id].i_bought_for.to_i == 0
+    if establish_price==true or @stock[packet.stock_id].i_sold_for.to_i == 0 or @stock[packet.stock_id].i_bought_for.to_i == 0
       say 'change prices'
-      @stock_info[packet.stock_id].i_sold_for = (packet.sell_price)*(1.0+@expected_bargain)
-      @stock_info[packet.stock_id].i_bought_for = (packet.buy_price)*(1.0+@expected_gain)
+      @stock[packet.stock_id].i_sold_for = (packet.sell_price)*(1.0+@expected_bargain)
+      @stock[packet.stock_id].i_bought_for = (packet.buy_price)*(1.0+@expected_gain)
     end
 
   end
 
 
   def on_best_order packet
-    @stock_info[packet.stock_id].fromBestOrder packet
+    @stock[packet.stock_id].fromBestOrder packet
   end
 
 
   def fix_selling_price(stock_id, price)
-    if @stock_info[stock_id].i_sold_for.to_i > 0
-      @stock_info[stock_id].i_sold_for
+    if @stock[stock_id].i_sold_for.to_i > 0
+      @stock[stock_id].i_sold_for
     else
-      if @stock_info[stock_id].sell_price.to_i > 0 #ja sprzedam po tyle po ile ktos inny sprzeda
-        @stock_info[stock_id].i_sold_for = @stock_info[stock_id].sell_price
+      if @stock[stock_id].sell_price.to_i > 0 #ja sprzedam po tyle po ile ktos inny sprzeda
+        @stock[stock_id].i_sold_for = @stock[stock_id].sell_price
       else
-        @stock_info[stock_id].i_sold_for = $csv[stock_id]['cena']*1.05
+        @stock[stock_id].i_sold_for = $csv[stock_id]['cena']*1.05
       end
     end
   end
@@ -127,10 +127,10 @@ class DumbClient < SClient
   end
 
   def panic_sell(stock_id)
-    @stock_info[stock_id].i_sold_for *= 0.9
+    @stock[stock_id].i_sold_for *= 0.9
 
     timer(rand(5)+1) {
-      sell_stock_all(stock_id, @stock_info[stock_id].i_sold_for, true)
+      sell_stock_all(stock_id, @stock[stock_id].i_sold_for, true)
     }
   end
 
