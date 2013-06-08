@@ -68,7 +68,7 @@ class StockPacketOut < StockPacket
   end
 
   def forge_final
-    puts "Trying to send: #{@bytearray.unpack('c*')}"
+    #puts "Trying to send: #{@bytearray.unpack('c*')}"
     [@bytearray.length].pack('s>') + @bytearray
   end
 end

@@ -1,6 +1,5 @@
 require 'rubygems'
 
-
 require 'packets.rb'
 
 require 'csvreader.rb'
@@ -51,22 +50,36 @@ end
 class SClient
 
   def initialize(password=nil, user_id=0)
+    Thread.abort_on_exception=true
     @id = user_id
     @password = password
     @buffer = ''
     @my_stocks = {}
     @my_orders = []
     @socket = TCPSocket.new 'localhost', 12345
+    @socket.setsockopt(Socket::IPPROTO_TCP,Socket::TCP_NODELAY,1)
     @threads = []
     @sendlock = Mutex.new
+    @debug = false
     @worker = Worker.new
+    @last_received = Time.now #dumb congestion prevention?
     post_init
   end
 
   def run
+    Thread.abort_on_exception=true
     loop {
-      data = @socket.readpartial(1024)
+      if @last_received < Time.now-30
+
+        #@socket = TCPSocket.new 'localhost', 12345
+        #@last_received = Time.now
+        #post_init
+        #Thread.exit
+      end
+      #data = @socket.readpartial(4096)
+      data = @socket.readpartial(4096)
       receive_data data if data.to_s.length>0
+      sleep(0.05)
     }
   end
 
@@ -79,7 +92,7 @@ class SClient
       send LoginUserReq.new(@id, @password).forge
     end
 
-    @threads << Thread.new{ loop{say "/loop/#{Time.now} #{@my_stocks.to_s}";sleep(5) } }
+    @loop_thread = Thread.new{ loop{say "/loop/#{Time.now} #{@my_stocks.to_s}";sleep(5) } }
   end
 
   def cash
@@ -92,6 +105,7 @@ class SClient
     @buffer += data.to_s
 
     while @buffer.length > 2 do
+      @last_received = Time.now
       packet = StockPacketIn.new(@buffer[0..32768])
       say "packet len #{packet.packetlen}"
 
@@ -187,7 +201,9 @@ class SClient
 
 
   def say something
-    puts "#{Time.now} [#{@id.to_s}]: #{something}"
+    if @debug==true
+      puts "#{Time.now} [#{@id.to_s}]: #{something}"
+    end
   end
 
   def stock_amount stock_id
@@ -237,7 +253,7 @@ class SClient
 
   def timer(sec, &block)
     #say 'Thread creation'
-    Thread.new { sleep(sec); say 'Executing thread'; block.call }
+    Thread.new { Thread.abort_on_exception=true; sleep(sec); say 'Executing thread'; block.call }
   end
 
   def on_register_user_resp_ok packet
