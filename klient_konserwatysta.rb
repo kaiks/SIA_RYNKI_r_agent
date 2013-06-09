@@ -3,11 +3,12 @@ require './klient.rb'
 class DumbClient < SClient
 
   def initialize(password=nil, user_id=0)
-    super(password, user_id)
     @rng = Random.new
     @panic_thread = nil
     @stock = {}
     $csv.each_key { |k| @stock[k] = StockInfo.new }
+
+    super(password, user_id)
   end
 
 
@@ -220,7 +221,7 @@ end
 
 @klienci = []
 rng = Random.new
-300.times { |i|
+390.times { |i|
   @klienci << Thread.new {
     Thread.abort_on_exception=true
     sleep( rng.rand(0.0 .. 100.0) )

@@ -269,7 +269,7 @@ class SClient
   def buy(stock_id, amount, price)
     say "Let's buy #{amount} of #{stock_id} for #{price}"
 
-    if amount*price
+    if amount*price == 0
       say "[BUY] Invalid parameters. amount=#{amount} price=#{price}"
       return
     end

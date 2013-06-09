@@ -1,0 +1,1 @@
+jruby -J-Djruby.thread.pooling=true -Xerrno.backtrace=true --server %1

@@ -51,7 +51,7 @@ class DumbClient < SClient
     @my_stocks.each_key { |k|
       if k>1
         send GetStockInfo.new(k).forge
-        if @stock[k].initialized and @stock[k].i_sold_for.to_i > 0 and  @stock[k].i_bought_for.to_i > 0
+        if @stock[k].initialized and @stock[k].i_sold_for.to_i > 0 and @stock[k].i_bought_for.to_i > 0
           say "SI ISF #{@stock[k].i_sold_for}"
           say "SI IBF #{@stock[k].i_bought_for}"
           timer(60) {
@@ -64,7 +64,21 @@ class DumbClient < SClient
         end
       end
     }
+
+    if @my_stocks.length < 2
+      buy_random_stock
+    end
   end
+
+
+  def buy_random_stock
+    say 'Buying random stock'
+
+    stock_id = rand(2..21)
+    send GetStockInfo.new(stock_id).forge
+    buy(stock_id,1,cash)
+  end
+
 
   def on_get_my_orders_resp packet
     say "My orders: #{@my_orders.to_s}"
