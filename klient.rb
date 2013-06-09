@@ -88,6 +88,7 @@ class SClient
     @debug = false
     @worker = Worker.new
     @last_received = Time.now #dumb congestion prevention?
+    @stocks_im_trading = Set.new
     post_init
   end
 
@@ -110,11 +111,9 @@ class SClient
   def post_init
     @threads << Thread.new { run }
 
-    if @id == 0
-      send RegisterUserReq.new(@password).forge
-    else
-      send LoginUserReq.new(@id, @password).forge
-    end
+    send @id == 0 ?
+      RegisterUserReq.new(@password).forge :
+      LoginUserReq.new(@id, @password).forge
 
     @loop_thread = Thread.new{ loop{ say "[LOOP] #{@my_stocks.to_s}"; sleep(5) } }
   end
@@ -194,6 +193,7 @@ class SClient
         when $packets[:GET_MY_STOCKS_RESP] then
           packet = GetMyStocksResp.new(packet.get)
           @my_stocks = packet.stockhash
+          @my_stocks.each_key { |k| @stocks_im_trading.add(k) }
           say "Received my stocks info #{@my_stocks.to_s}"
           on_get_my_stocks_resp(packet)
 
@@ -209,7 +209,7 @@ class SClient
           on_get_stock_info_resp packet
 
         else
-          say "Unknown packet: #{packet.id} #{packet.bytearray}"
+          say "Unknown packet: ID=#{packet.id} #{packet.bytearray}"
 
       end
     end
@@ -232,7 +232,7 @@ class SClient
 
 
   def say something
-    if @debug==true
+    if @debug
       puts "#{Time.now} [#{@id.to_s}]: #{something}"
     end
   end
@@ -246,6 +246,7 @@ class SClient
 
 
   def sell(stock_id, amount, price)
+    @stocks_im_trading.add(stock_id)
     say "Let's sell #{amount} of #{stock_id} for #{price}"
 
     if amount*price == 0
@@ -267,6 +268,7 @@ class SClient
 
 
   def buy(stock_id, amount, price)
+    @stocks_im_trading.add(stock_id)
     say "Let's buy #{amount} of #{stock_id} for #{price}"
 
     if amount*price == 0

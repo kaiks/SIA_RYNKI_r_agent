@@ -2,9 +2,7 @@ require 'klient.rb'
 
 class DumbClient < SClient
   def initialize(password=nil, user_id=0)
-    @debug = true
     Thread.abort_on_exception=true
-    say "rzyg"
     @panic_thread = nil
     @stock = {}
     $csv.each_key { |k| @stock[k] = StockInfo.new }
@@ -51,7 +49,7 @@ class DumbClient < SClient
     @my_stocks.each_key { |k|
       if k>1
         send GetStockInfo.new(k).forge
-        if @stock[k].initialized and @stock[k].i_sold_for.to_i > 0 and @stock[k].i_bought_for.to_i > 0
+        if @stock[k].initialized && (@stock[k].i_sold_for.to_i > 0) && (@stock[k].i_bought_for.to_i > 0)
           say "SI ISF #{@stock[k].i_sold_for}"
           say "SI IBF #{@stock[k].i_bought_for}"
           timer(60) {
@@ -73,10 +71,12 @@ class DumbClient < SClient
 
   def buy_random_stock
     say 'Buying random stock'
-
     stock_id = rand(2..21)
-    send GetStockInfo.new(stock_id).forge
-    buy(stock_id,1,cash)
+    unless @stocks_im_trading.include? stock_id
+      send GetStockInfo.new(stock_id).forge
+      buy(stock_id,1,cash)
+    end
+
   end
 
 
@@ -97,7 +97,7 @@ class DumbClient < SClient
 
     @stock[packet.stock_id].fromStockInfo packet
 
-    if establish_price==true or @stock[packet.stock_id].i_sold_for.to_i == 0 or @stock[packet.stock_id].i_bought_for.to_i == 0
+    if (establish_price==true) or (@stock[packet.stock_id].i_sold_for.to_i == 0) or (@stock[packet.stock_id].i_bought_for.to_i == 0)
       say 'change prices'
       @stock[packet.stock_id].i_sold_for = (packet.sell_price)*(1.0+@expected_bargain)
       @stock[packet.stock_id].i_bought_for = (packet.buy_price)*(1.0+@expected_gain)

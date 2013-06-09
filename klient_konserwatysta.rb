@@ -175,10 +175,16 @@ class DumbClient < SClient
   def buy_for(stock, price, perc=1.00)
     say "Buy for: #{stock} #{price}"
     if price.to_i>0
+      @stock[stock].i_bought_for = price
       buy(stock, (perc*cash/price).to_i, price)
     else
       say "Couldn\'t buy #{stock} (price is 0)"
     end
+  end
+
+
+  def orders_for_stock(stock)
+    @my_orders.select { |order| order[2] }
   end
 
 
@@ -221,11 +227,11 @@ end
 
 @klienci = []
 rng = Random.new
-390.times { |i|
+ARGV[1].to_i.times { |i|
   @klienci << Thread.new {
     Thread.abort_on_exception=true
     sleep( rng.rand(0.0 .. 100.0) )
-    DumbClient.new('%06d' %(i+2), i+2)
+    DumbClient.new('%06d' %(i+2+ARGV[0].to_i), i+2+ARGV[0].to_i)
   }
   sleep(0.2)
 }
