@@ -8,6 +8,7 @@ class DumbClient < StockClient
     @expected_gain = gain
 
     super(password, user_id)
+    @debug = true
   end
 
 
@@ -51,18 +52,19 @@ class DumbClient < StockClient
     @my_stocks.each_key { |stock_id|
       if stock_id > 1
 
+
         if @stock[stock_id].initialized
+          say 'Stock is initialized: buy'
           buy_for(stock_id, @stock[stock_id].sell_price, 0.5)
         else
+          say 'Stock is uninitialized'
           send SubscribeStock.new(stock_id).forge
           send GetStockInfo.new(stock_id).forge
-          next
         end
 
       end
     }
   end
-
 
 
   def on_get_my_orders_resp packet
@@ -90,7 +92,7 @@ class DumbClient < StockClient
 
     #20% Szansy na panike
     1.in(4) {
-      timer( random(2.0 .. 20.0) ) {
+      timer( random(10.0 .. 20.0) ) {
         cancel_order(order[1])
         panic_sell(order[2])
       }
@@ -113,7 +115,7 @@ class DumbClient < StockClient
 
       randval = random(4)
 
-      if randval == 0
+      if randval > 0
         price = random(1.1 .. 1.5) * @stock[order[2]].i_bought_for
         buy_for(order[2], price, 0.5)
       else
@@ -132,8 +134,8 @@ class DumbClient < StockClient
     @stock[stock].fromStockInfo packet
 
     timer( random(1 .. 5) ) {
-      price = (1.0 - @expected_gain) * packet.sell_price
-      price = fix_selling_price(stock, price)
+      price = (1.0 + @expected_gain) * packet.sell_price
+      #price = fix_selling_price(stock, price)
       sell_all_stocks(stock, price)
     }
   end
@@ -164,7 +166,7 @@ class DumbClient < StockClient
     @stock[stock_id].i_sold_for *= 0.9
 
     timer( random(1 .. 5) ) {
-      sell_pkc(stock_id, amount(stock_id) )
+      sell_pkc(stock_id, stock(stock_id).amount )
     }
   end
 
@@ -214,7 +216,7 @@ end
 rng = Random.new
 ARGV[1].to_i.times { |i|
   @klienci << Thread.new {
-    sleep( rng.rand(0.0 .. 100.0) )
+    #sleep( rng.rand(0.0 .. 100.0) )
     DumbClient.new('%06d' %(i+2+ARGV[0].to_i), i+2+ARGV[0].to_i)
   }
   sleep(0.2)

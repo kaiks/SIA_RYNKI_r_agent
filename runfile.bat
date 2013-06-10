@@ -1,1 +1,1 @@
-jruby -J-Djruby.thread.pooling=true -Xerrno.backtrace=true --server %*
+jruby -Xerrno.backtrace=true -Xcompile.invokedynamic=true --server %*

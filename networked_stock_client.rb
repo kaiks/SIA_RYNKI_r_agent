@@ -122,7 +122,8 @@ class NetworkedStockClient
 
         when $packets[:GET_MY_STOCKS_RESP] then
           packet = GetMyStocksResp.new(packet.get)
-          @my_stocks = packet.stockhash
+          @my_stocks.each_value { |stock| stock.amount = 0 }
+          @my_stocks.merge!(packet.stockhash)
           @my_stocks.each_value{ |stock| stock.trading = true }
           say "Received my stocks info #{@my_stocks.to_s}"
           on_get_my_stocks_resp(packet)

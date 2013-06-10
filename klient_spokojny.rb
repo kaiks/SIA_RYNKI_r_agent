@@ -4,11 +4,11 @@ class DumbClient < StockClient
   def initialize(password=nil, user_id=0)
     @stock = {}
     $csv.each_key { |k| @stock[k] = StockInfo.new }
+    super(password, user_id)
     @expected_gain = random(0.01 .. 0.25)
     @greedy_gain   = 1.5
     @expected_bargain = -random(0.01 .. 0.25)
     say "Expected gain: #{@expected_gain.to_s} bargain: #{@expected_bargain.to_s}"
-    super(password, user_id)
     @debug = true
   end
 
@@ -16,7 +16,7 @@ class DumbClient < StockClient
   def on_login_user_resp_ok packet
     @threads << Thread.new {
       loop {
-        sleep(rand(10)+10)
+        sleep(random(10)+10)
         send GetMyStocks.new.forge
         send GetMyOrders.new.forge
       }
@@ -69,7 +69,7 @@ class DumbClient < StockClient
   def buy_random_stock
     say 'Buying random stock'
     stock_id = random(2 .. 21)
-    unless stock(stock_id).trading
+    unless stock(stock_id).trading?
       send GetStockInfo.new(stock_id).forge
       buy(stock_id,1,cash)
     end
@@ -141,10 +141,10 @@ end
 
 @klienci = []
 
-88.times { |i|
+100.times { |i|
   @klienci << Thread.new {
     sleep(1.0*rand(100)/10.0)
-    DumbClient.new('%06d' %(i+402), i+402)
+    DumbClient.new('%06d' %(i+900), i+900)
   }
 }
 

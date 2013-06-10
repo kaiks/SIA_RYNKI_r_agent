@@ -18,8 +18,8 @@ Thread.abort_on_exception = true
 class StockClient < NetworkedStockClient
 
   def initialize(password=nil, user_id=0)
-    super(password, user_id)
     @rng = Random.new
+    super(password, user_id)
     @threads << Thread.new{ display_stocks_loop } if @debug
   end
 
@@ -73,7 +73,7 @@ class StockClient < NetworkedStockClient
       return
     end
 
-    if price < max_buying_price(stock_id)
+    if price < min_buying_price(stock_id)
       say 'No point in selling stock. I\'m buying for less.'
       return
     end
@@ -98,7 +98,7 @@ class StockClient < NetworkedStockClient
       return
     end
 
-    if price > min_selling_price(stock_id)
+    if price > max_selling_price(stock_id)
       say 'No point in buying stock. I\'m selling for less.'
       return
     end
@@ -144,13 +144,13 @@ class StockClient < NetworkedStockClient
 
 
 
-  def min_selling_price(stock_id)
-    my_orders_for_stock(stock_id, 2).map{ |order| order[4] }.min
+  def max_selling_price(stock_id)
+    my_orders_for_stock(stock_id, 2).map{ |order| order[4] }.max || 99999999999
   end
 
 
-  def max_buying_price(stock_id)
-    my_orders_for_stock(stock_id, 1).map{ |order| order[4] }.max
+  def min_buying_price(stock_id)
+    my_orders_for_stock(stock_id, 1).map{ |order| order[4] }.min || 0
   end
 
 
