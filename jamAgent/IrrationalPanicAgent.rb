@@ -6,7 +6,7 @@ require 'stockInformation.rb'
 class IrrationalPanicAgent < SimpleAgent
 	attr_accessor :coef_price_decrease, :coef_price_increase, :best_offers, :best_offers_grad,
 				  :coef_money_when_buying, :coef_orders_when_selling, :subscribed_count,
-				  :rand_for_action, :subscribed
+				  :rand_for_action, :subscribed, :max_orders_treshold
     
 	def self.generateRandomCoef(rand_gen = Random.new, coef_dict = {})
 		
@@ -21,13 +21,16 @@ class IrrationalPanicAgent < SimpleAgent
 		#coef_orders_when_selling
 		cows_min, cows_max = coef_dict.fetch(:coef_orders_when_selling, [0.05, 1])
 		#subscribed_count 
-		sc_min, sc_max = coef_dict.fetch(:subscribed_count, [1, 20])
+		sc_min, sc_max = coef_dict.fetch(:subscribed_count, [19, 21])
+		
+		mot_min, mot_max = coef_dict.fetch(:max_orders_treshold, [2, 20]) 
 		
 		coefs = {:coef_price_decrease => rand_gen.rand(cpd_min..cpd_max),
 				 :coef_price_increase => rand_gen.rand(cpi_min..cpi_max),
 				 :coef_money_when_buying => rand_gen.rand(cmwb_min..cmwb_max),
 				 :coef_orders_when_selling => rand_gen.rand(cows_min..cows_max),
-				 :subscribed_count => rand_gen.rand(sc_min..sc_max)}
+				 :subscribed_count => rand_gen.rand(sc_min..sc_max),
+				 :max_orders_treshold => rand_gen.rand(mot_min..mot_max)}
 		
 		dict.update(coefs)
 	end
@@ -45,6 +48,9 @@ class IrrationalPanicAgent < SimpleAgent
 		raise "coef_orders_when_selling <= 0" unless inst.coef_orders_when_selling > 0.0
 		inst.subscribed_count = data.fetch(:subscribed_count)
 		raise "subscribed_count <= 0" unless inst.subscribed_count > 0
+		inst.max_orders_treshold = data.fetch(:max_orders_treshold)
+		raise "max_orders_trashold <= 0" unless inst.max_orders_treshold > 0
+		
 		
 		inst.rand_for_action = Random.new	
 		inst.subscribed = []
@@ -64,6 +70,10 @@ class IrrationalPanicAgent < SimpleAgent
 			@subscribed[-1] = my_gift_stock unless @subscribed.include? my_gift_stock 
 		end
 		subscribe subscribed
+		# After login grad should be 0.0 as we have no data to make other claims
+		subscribed.each {|stockId| @best_offers_grad[:sell][stockId] = 0.0 
+								   @best_offers_grad[:buy][stockId] = 0.0}
+		
 		true
 	end	
 	
@@ -73,34 +83,35 @@ class IrrationalPanicAgent < SimpleAgent
 		money = @my_money
 		money = computed_money unless computed_money <= 0
 		
-		return false unless money >= 0
+		return false unless money >= 1
 		
 		# Will buy for a little bit more than the best offer suggests.
-		price_per_stock = Random.new.rand 1..(@my_money / 10) 
-		if @best_offers[:buy].include? stockId
+		price_per_stock = Random.new.rand 1..[(money * @coef_money_when_buying).to_i, 1].max
+		if @best_offers[:sell].include? stockId
 			price_per_stock = [@best_offers[:sell][stockId].price + (@best_offers[:sell][stockId].price * price_change_coef).to_i, 1].max
 		end
 		raise "buyStock: money #{money} and price per stock #{price_per_stock}" unless price_per_stock > 0 
-		
-		stock_amount = [money / price_per_stock, $stock_info[stockId]['l_akcji']].min
-		
+		max_stock_money_can_buy = $stock_info.fetch(stockId, {}).fetch('l_akcji', 1 << 30)
+		stock_amount = [money / price_per_stock, max_stock_money_can_buy].min
 		return false unless stock_amount > 0
 		
-		
+		#puts "| #{stockId} | #{stock_amount} | #{price_per_stock} |"
 		@socket.print BuyStockReq.new(stockId, stock_amount, price_per_stock).forge  
 		# should probably wait for an id of new  order 
-		@my_money -= stock_amount * price_per_stock
-		##puts "Ordered to buy #{stock_amount} of id=#{stockId} for #{price_per_stock} per stock" 
+		@my_money -= stock_amount * price_per_stock 
+		puts "Ordered to buy #{stock_amount} of id=#{stockId} for #{price_per_stock} per stock and my money: #{@my_money}"
 		true
 	end
 
 	def sellStock(stockId, price_change_coef)
 		#puts "Time to sell some stock #{stockId} #{price_change_coef}"
+		# It should NEVER happen, but it does..
+		raise "NO CO KURWA?!" unless @my_stocks.include? stockId
+		#puts "ORDERS:\n"
+		#@my_orders.each {|k,v| puts "id= #{k} =>  #{v}\n"}
 		computed_stock_amount = (@my_stocks[stockId] * @coef_orders_when_selling).to_i
-		
 		stock_amount = @my_stocks[stockId]
-		stock_amount = computed_stock_amosunt unless computed_stock_amount < 0
-		
+		stock_amount = computed_stock_amount unless computed_stock_amount < 0
 		return false unless stock_amount > 0
 		# Will sell for a little bit less than the best offer suggests
 		price_per_stock = Random.new.rand 1...100
@@ -108,22 +119,32 @@ class IrrationalPanicAgent < SimpleAgent
 			price_per_stock = [@best_offers[:buy][stockId].price + (@best_offers[:buy][stockId].price * price_change_coef).to_i, 1].max
 		end
 		raise "sellStock: stocks[#{stockId}] = #{@my_stocks[stockId]} and price per stock #{price_per_stock}" unless price_per_stock > 0 
-		
 		@socket.print SellStockReq.new(stockId, stock_amount, price_per_stock).forge
 		# should probably wait for an id of new  order
 		@my_stocks[stockId] -= stock_amount
-		##puts "Ordered to sell #{stock_amount} of id=#{stockId} for #{price_per_stock} per stock" 
+		
+		puts "Ordered to sell #{stock_amount} of id=#{stockId} for #{price_per_stock} per stock" 
 		true
 	end
 	
-	def act
+	def act!
 		#	If agent has money and there are some orders which are good enough to buy => buy one
 		#	If agent has some stocks which are good enough to sell => sell one
-		puts "Time to act!"
+		#puts "Time to act!"
 		updateOrdersAndStocks!
-		sell_candidates_higher = best_offers_grad[:buy].select { |stockId, diff_perc| 
-									 diff_perc > @coef_price_increase and @my_stocks.include? stockId}
-		
+		# If agent has too much orders, then only cancel them.
+		if @max_orders_treshold <= (@my_orders[:sell].length + @my_orders[:buy].length)
+				orders_to_cancel = []
+				orders_to_cancel += @my_orders[:sell].keys
+				orders_to_cancel += @my_orders[:buy].keys
+				orderId = orders_to_cancel.sample 
+				puts "Canceling order order_id = #{orderId}"
+				@socket.print CancelOrderReq.new(orderId).forge
+		end
+		sell_candidates_higher = @best_offers_grad[:buy].select { |stockId, diff_perc| 
+									 diff_perc > @coef_price_increase and @my_stocks.include? stockId and 
+									 @best_offers[:buy].include? stockId}
+
 		#sell_candidates_panic = best_offers_grad[:buy].select 
 		#							{|stockId, diff_perc| 
 		#							 diff_perc < @coef_price_decrease and my_stocks.include? stockId}			 
@@ -131,18 +152,19 @@ class IrrationalPanicAgent < SimpleAgent
 		#buy_candidates_higher = best_offers_grad[:sell].select 									
 		#							{|stockId, diff_perc| 
 		#							 diff_perc > @coef_price_increase and my_stocks.include? stockId}
-		
-		buy_candidates_panic = best_offers_grad[:sell].select {|stockId, diff_perc| 
-									 diff_perc < @coef_price_decrease}
+
+		buy_candidates_panic = @best_offers_grad[:sell].select {|stockId, diff_perc| 
+									 diff_perc < @coef_price_decrease and @best_offers[:sell].include? stockId and 
+									 @my_money >= @best_offers[:sell][stockId].price}
 
 		action_sell = false
 		action_buy = false
-		sell_candidate_higher.each {|stockId| action_sell ||= sellStock(stockId, @coef_price_increase)}
+		sell_candidates_higher.each {|stockId, v| action_sell ||= sellStock(stockId, @coef_price_decrease)}
 		#sell_candidate_panic.each { |stockId| sellStock(stockID, @coef_price_decrease)}
 		#buy_candidate_higher.each {|stockId| sellStock(stockId, @coef_price_increase)}
-		buy_candidate_panic.each { |stockId| action_buy ||= buyStock(stockID, @coef_price_decrease)}
-		
+		buy_candidates_panic.each { |stockId, v| action_buy ||= buyStock(stockId, @coef_price_increase)}
 		# If false then it means there was no action
+		#puts "ACTED?"
 		action_sell and action_buy
 	end
 	
@@ -151,29 +173,33 @@ class IrrationalPanicAgent < SimpleAgent
 		# Create available actions and then choose sample one.
 		actions = []
 		#puts "Best offers\n:#{@best_offers}\n"
+
+		# buy stock action
+		stock_available_to_buy = @subscribed #@best_offers[:sell].select {|stockId, data| data.price < @my_money } .keys
+		unless stock_available_to_buy.empty? and @money >= 1
+			actions << :buy_stocks
+		end		
+		# sell stock action
+		stock_available_to_sell = @my_stocks.select { |k,v| v > 0} .keys
+		unless stock_available_to_sell.empty?
+			actions << :sell_stocks
+		end
+
 		# cancel order action
 		orders_to_cancel = []
 		orders_to_cancel += @my_orders[:sell].keys
 		orders_to_cancel += @my_orders[:buy].keys
 		
+		
 		unless orders_to_cancel.empty?
 			actions << :cancel_order
 		end
 
-		# buy stock action 
-		stock_available_to_buy = @best_offers[:sell].select {|stockId, data| data.price < @my_money } .keys
-		unless stock_available_to_buy.empty?
-			actions << :buy_stocks
-		end		
-		# sell stock action
-		puts @my_stocks.select {|stockId, amount| amount > 0} .keys
-		stock_available_to_sell = @my_stocks.select { |k,v| v > 0} .keys
-		unless stock_available_to_sell.empty?
-			actions << :sell_stocks
-		end
+		
+		
 		# Means that agent is broke.
 		return false if actions.empty? 
-		
+
 		case actions.sample  
 			when :cancel_order
 				orderId = orders_to_cancel.sample 
@@ -193,18 +219,6 @@ class IrrationalPanicAgent < SimpleAgent
 		true
 	end
 	
-	def updateOrdersAndStocks!
-		@socket.print GetMyStocks.new.forge
-		@socket.print GetMyOrders.new.forge
-		
-		sock, = IO.select [@socket], [], [], 3
-		if sock[0] == nil
-			puts "Timeout!"
-			return false
-		end
-		newData!
-		processMessages!
-	end
 	
 	def processMessage!
 		begin
@@ -213,40 +227,58 @@ class IrrationalPanicAgent < SimpleAgent
 			return false
 		end
 		# When best offer => update best_offers and recompute best_offers_grad
+		begin
 		case packet.id
 			when $packets[:BEST_ORDER] then
+				#puts "BEST OFFER!"
 				best_order = BestOrder.new(packet.get)
 				val = OpenStruct.new(:amount => best_order.amount, :price => best_order.price)
 				# If only the price is considered is easy to trick agents into massive selling
 				# their stocks.
-							
-				h = {best_order.stockId => best_order.amount * best_order.price}
+				stockId = best_order.stock_id
+				changed = best_order.amount * best_order.price
 			
 				order_type = TO_ORDER_TYPE[best_order.type]
-				@best_offers[order_type].merge! best_order.stock_id => val 
+				
+				old_best_offer = @best_offers[order_type].fetch(stockId, OpenStruct.new(:amount => 0, :price => 0))
+				
+				@best_offers[order_type].merge! stockId => val 
+				#puts @best_offers[order_type][stockId]
 				# Percentage loss\rise
-				best_offers_grad[order_type].merge!(h) { |key, old, new| (new - old) / (new.to_f + old.to_f) }
+				price_amount_old = old_best_offer.amount.to_f + old_best_offer.price.to_f
+				price_amount_new = @best_offers[order_type][stockId].amount.to_f * @best_offers[order_type][stockId].price.to_f
+				# no best offers, all gone!
+				if price_amount_new == 0
+					@best_offers_grad[order_type].update({stockId => @coef_price_increase + 0.001})
+				else
+					@best_offers_grad[order_type].update({stockId => (price_amount_new - price_amount_old) / (price_amount_new + price_amount_old)})
+				end
+				#puts @best_offers
+				#puts "\n", @best_offers_grad, "\n"
 			when $packets[:BUY_TRANSACTION] then
+				puts "BUY TRANSACTION"
 				buy_transaction = BuyTransaction.new(packet.get)
 				
 				if not @my_orders[:buy].include? buy_transaction.order_id
-					puts "Probably have broken data"
+					#puts "Probably have broken data"
 				elsif buy_transaction.amount == 0 
 					@my_orders[:buy].delete(buy_transaction.order_id)
 				else
 					@my_orders[:buy][buy_transaction.order_id] = buy_transaction.amount
 				end
 			when $packets[:SELL_TRANSACTION] then
+				puts "SELL TRANSACTION"
 				sell_transaction = SellTransaction.new(packet.get)
 
 				if not @my_orders[:sell].include? sell_transaction.order_id
-					puts "Probably have broken data"
+					#puts "Probably have broken data"
 				elsif sell_transaction.amount == 0
 					@my_orders[:sell].delete(sell_transaction.order_id)
 				else
 					@my_orders[:sell][sell_transaction.order_id] = sell_transaction.amount
 				end
 			when $packets[:GET_MY_STOCKS_RESP] then
+				#puts "GET STOCKS"
 				my_stocks_packet = GetMyStocksResp.new(packet.get)
 				temp_hash = my_stocks_packet.stockhash
 				
@@ -254,9 +286,9 @@ class IrrationalPanicAgent < SimpleAgent
 				temp_hash.delete(1)			#
 				@my_stocks = temp_hash
 			when $packets[:GET_MY_ORDERS_RESP] then
+				#puts "GET ORDERS"
 				@my_orders = {:sell => {}, :buy => {}}
 				my_orders_packet = GetMyOrdersResp.new(packet.get)
-				
 				my_orders_packet.orderlist.each { 
 						|type, order_id, stock_id, amount, price|
 										val = OpenStruct.new(:stock_id => order_id, :amount => amount, :price => price)
@@ -266,6 +298,9 @@ class IrrationalPanicAgent < SimpleAgent
 				#puts "\nmy orders:\n#{@my_orders.to_s}\n"
 			#else
 				#puts "Unknown message. #{packet.id}"
+			end
+			rescue Exception => e
+				puts "Probably malformed packet from server (shouldn't happen) #{e}"
 			end
 		true	
 	end

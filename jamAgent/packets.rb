@@ -74,7 +74,7 @@ class StockPacketOut < StockPacket
 end
 
 class StockPacketIn < StockPacket
-  attr_reader :packetlen
+  attr_reader :packetlen, :bytearray
   def initialize(bytestring)
     #puts "#{bytestring.length} #{bytestring}"
     @bytearray  = bytestring.unpack('c*')
@@ -85,6 +85,7 @@ class StockPacketIn < StockPacket
 
   def pull(type)
     retval = nil
+	begin
     case type
       when 'int' then
         retval = @bytearray[@offset..(@offset+3)].pack('c*').unpack('l>')[0]
@@ -93,14 +94,18 @@ class StockPacketIn < StockPacket
         retval = @bytearray[@offset..(@offset+1)].pack('c*').unpack('s>')[0]
         @offset += 2
       when 'string' then
-        retval = @bytearray[@offset..@bytearray.length].pack('c*')
-        @offset = @bytearray.length
+        retval = @bytearray[@offset..@bufferarray.length].pack('c*')
+        @offset += @bufferarray.length
       when 'byte' then
         retval = [@bytearray[@offset]].pack('c*').unpack('c')[0]
         @offset += 1
       else
         raise 'Error: unexpected type'
     end
+	rescue Exception => e
+		#puts "pull #{type} #{e}"
+		raise e
+	end
     return retval
   end
 
@@ -471,11 +476,10 @@ class GetMyOrdersResp <StockPacketIn
     super(bytestring)
     @order_count = self.pull('int')
     @orderlist = []
-    #puts "Parsing... #{@order_count} items"
     @order_count.times do |i|
       order = []
       @orderlist += [[self.pull('byte'),self.pull('int'),self.pull('int'),self.pull('int'),self.pull('int')]]
-    end
+	end
   end
 end
 

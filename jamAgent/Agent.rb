@@ -12,8 +12,8 @@ class SimpleAgent
 	
 	def self.generateRandomCoef(rand_gen = Random.new, coef_dist = {})
 		
-		sleep_time_min, sleep_time_max = coef_dist.fetch(:sleep_time, [0.5, 1.5])
-		max_idle_min, max_idle_max = coef_dist.fetch(:max_idle, [3,10])
+		sleep_time_min, sleep_time_max = coef_dist.fetch(:sleep_time, [1, 3])
+		max_idle_min, max_idle_max = coef_dist.fetch(:max_idle, [2,5])
 		
 		{:sleep_time => rand_gen.rand(sleep_time_min..sleep_time_max),
 		 :max_idle => rand_gen.rand(max_idle_min..max_idle_max)}
@@ -44,8 +44,21 @@ class SimpleAgent
 	end
 	
 	def randomAct!
+		true
 	end
 
+	def updateOrdersAndStocks!
+		@socket.print GetMyStocks.new.forge
+		@socket.print GetMyOrders.new.forge
+		
+		sock, = IO.select [@socket], [], [], 3
+		if sock[0] == nil
+			puts "Timeout!"
+			return false
+		end
+		newData!
+		processMessages!
+	end
 	def start!
 		@buffer = ''
 		if not tryConnect
@@ -58,9 +71,13 @@ class SimpleAgent
 		end
         iterations = 0
         while true
+			# He's broke.
+			if @my_money == 0 and @my_orders[:sell].empty? and @my_orders[:buy].empty?
+				puts "Agent #{@id} is broke and goes away from the market."
+				return nil
+			end
             begin
-                
-                processMessages!
+				updateOrdersAndStocks!
                 if act!
 					ierations = 0
                 else
@@ -213,7 +230,7 @@ class SimpleAgent
 			return false
 		end
 		
-		@buffer << segment
+		@buffer += segment
 		
 		while true
 			begin
@@ -222,14 +239,14 @@ class SimpleAgent
 				#puts "#{id} Nothing  left to read"
 				break
 			end
-			@buffer << segment
+			@buffer += segment
 		end
 		true
 	end
 	
 	def readPacketFromBuffer!
-		packet = StockPacketIn.new @buffer[0...512]
-		raise "msg too short" if @buffer.length < (packet.packetlen + 1)
+		packet = StockPacketIn.new @buffer[0...16384]
+		raise "msg too short" if @buffer.length < (packet.packetlen + 2)
 		@buffer.slice! 0..(packet.packetlen+1)
 		packet
 	end

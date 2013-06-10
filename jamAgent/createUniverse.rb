@@ -104,7 +104,7 @@ end
 
 def startUniverse
 			 
-	count = 40	
+	count = 100	
 	agentsData = {IrrationalPanicAgent => generateDataForAgent(IrrationalPanicAgent, count)}
 	
 	
