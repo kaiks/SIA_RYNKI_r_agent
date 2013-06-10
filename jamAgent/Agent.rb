@@ -111,7 +111,7 @@ class SimpleAgent
 		@socket.print LoginUserReq.new(id, password).forge
 		
 		sock, = IO.select [@socket], [], [], 3
-		if sock[0] == nil
+		if sock == nil
 			puts "Timeout!"
 			return false
 		end
