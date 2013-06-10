@@ -1,6 +1,6 @@
 require 'klient.rb'
 
-class BossClient < SClient
+class BossClient < StockClient
   def initialize(password=nil, user_id=0)
     super(password,user_id)
   end

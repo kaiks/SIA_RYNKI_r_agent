@@ -1,12 +1,11 @@
 require './klient.rb'
 
-class DumbClient < SClient
+class DumbClient < StockClient
 
-  def initialize(password=nil, user_id=0)
-    @rng = Random.new
-    @panic_thread = nil
+  def initialize(password=nil, user_id=0, gain = 0.1)
     @stock = {}
     $csv.each_key { |k| @stock[k] = StockInfo.new }
+    @expected_gain = gain
 
     super(password, user_id)
   end
@@ -16,7 +15,7 @@ class DumbClient < SClient
   def on_login_user_resp_ok packet
     @threads << Thread.new {
       loop {
-        sleep(@rng.rand(10 .. 20))
+        sleep(random(10 .. 20))
         send GetMyStocks.new.forge
         send GetMyOrders.new.forge
       }
@@ -52,7 +51,7 @@ class DumbClient < SClient
     @my_stocks.each_key { |stock_id|
       if stock_id > 1
 
-        if @stock[stock_id].initialized==true
+        if @stock[stock_id].initialized
           buy_for(stock_id, @stock[stock_id].sell_price, 0.5)
         else
           send SubscribeStock.new(stock_id).forge
@@ -70,7 +69,7 @@ class DumbClient < SClient
     say "My orders: #{@my_orders.to_s}"
     @my_orders.each do |order|
       #say "Now doing order #{order.to_s}"
-      if @stock[order[2]].checkInitialized { send GetStockInfo.new(order[2]).forge } == false
+      unless @stock[order[2]].checkInitialized { send GetStockInfo.new(order[2]).forge }
         next
       end
 
@@ -91,13 +90,13 @@ class DumbClient < SClient
 
     #20% Szansy na panike
     1.in(4) {
-      timer( @rng.rand(2.0 .. 20.0) ) {
+      timer( random(2.0 .. 20.0) ) {
         cancel_order(order[1])
         panic_sell(order[2])
       }
     }
 
-    timer( @rng.rand(1 .. 5) ) {
+    timer( random(1 .. 5) ) {
       say "Hey, let's get more of #{order[2]}"
       get_more_stock(order[2])
     }
@@ -108,16 +107,19 @@ class DumbClient < SClient
   def buy_order_action(order)
     @stock[order[2]].i_bought_for = order[4]
 
-    timer( @rng.rand(2.0 .. 20.0) ) {
+    timer( random(2.0 .. 20.0) ) {
       cancel_order(order[1]) if order[3]>2
       sleep(0.1)
 
-      randval = @rng.rand(4)
+      randval = random(4)
+
       if randval == 0
-        buy_for(order[2], @rng.rand(1.1 .. 1.5) * @stock[order[2]].i_bought_for, 0.5)
+        price = random(1.1 .. 1.5) * @stock[order[2]].i_bought_for
+        buy_for(order[2], price, 0.5)
       else
         get_more_stock(order[2], true)
       end
+
     }
   end
 
@@ -129,8 +131,10 @@ class DumbClient < SClient
 
     @stock[stock].fromStockInfo packet
 
-    timer( @rng.rand(1 .. 5) ) {
-      sell_stock_all(stock, fix_selling_price(stock, packet.sell_price*1.1)) #10% trzeba ugrac!
+    timer( random(1 .. 5) ) {
+      price = (1.0 - @expected_gain) * packet.sell_price
+      price = fix_selling_price(stock, price)
+      sell_all_stocks(stock, price)
     }
   end
 
@@ -146,7 +150,7 @@ class DumbClient < SClient
     if @stock[stock_id].i_sold_for.to_i > 0
       @stock[stock_id].i_sold_for
     else
-      if @stock[stock_id].sell_price.to_i > 0 #ja sprzedam po tyle po ile ktos inny sprzeda
+      if (price == 0) && (@stock[stock_id].sell_price.to_i > 0) #ja sprzedam po tyle po ile ktos inny sprzeda
         @stock[stock_id].i_sold_for = @stock[stock_id].sell_price
       else
         @stock[stock_id].i_sold_for = price
@@ -156,34 +160,25 @@ class DumbClient < SClient
 
 
 
-  def sell_stock_all(stock_id, price, pkc=false)
-    say "Sell all: #{stock_id} #{price.to_i}"
-    amount = stock(stock_id).amount
-    selling_price = [1, price].max
-    if pkc
-      say 'PKC sell'
-      selling_price=1
-    else
-      @stock[stock_id].i_sold_for = price
-    end
-    sell(stock_id, amount, selling_price)
-  end
+  def panic_sell(stock_id)
+    @stock[stock_id].i_sold_for *= 0.9
 
+    timer( random(1 .. 5) ) {
+      sell_pkc(stock_id, amount(stock_id) )
+    }
+  end
 
 
   def buy_for(stock, price, perc=1.00)
     say "Buy for: #{stock} #{price}"
-    if price.to_i>0
-      @stock[stock].i_bought_for = price
-      buy(stock, (perc*cash/price).to_i, price)
-    else
+    if price.to_i<=0
       say "Couldn\'t buy #{stock} (price is 0)"
+      return
     end
-  end
 
 
-  def orders_for_stock(stock)
-    @my_orders.select { |order| order[2] }
+    @stock[stock].i_bought_for = price
+    buy(stock, (perc*cash/price).to_i, price)
   end
 
 
@@ -211,15 +206,6 @@ class DumbClient < SClient
     end
   end
 
-
-
-  def panic_sell(stock_id)
-    @stock[stock_id].i_sold_for *= 0.9
-
-    timer( @rng.rand(1 .. 5) ) {
-      sell_stock_all(stock_id, @stock[stock_id].i_sold_for, true)
-    }
-  end
 
 
 end
