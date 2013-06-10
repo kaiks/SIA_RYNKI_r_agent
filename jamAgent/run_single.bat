@@ -1,0 +1,1 @@
+jruby  --server -Xerrno.backtrace=true  -Xss25k -Xmx2048m -J-Djruby.thread.pooling=true createUniverse.rb

@@ -1,14 +1,19 @@
-require './Agent.rb'
+require 'Agent.rb'
+require 'IrrationalPanicAgent.rb'
 
-def createAgents(agentClass, loginInfo, coef)
+#Thread.abort_on_exception=true
+
+
+
+def createAgents(agentClass, data)
     created = 0
     agentIds = {}
-    loginInfo.each {
-            |id, password|
-            begin
-                agent = agentClass.createInstance(id, password, coef)
-                created += 1
-                agentIds.update({agent.id => agent})
+    data.each {
+            |id, password, coef|
+            begin			
+				agent = agentClass.createInstance(id, password, coef)
+				created += 1
+                agentIds.update(agent.id => agent)
             rescue Exception => e
 				puts e
             end
@@ -22,7 +27,7 @@ def createUniverse(agentDataDictionary)
     agents = {}
     createdAgents = {}
     agentDataDictionary.each do |agentClass, data|
-                                    agentIds, created = createAgents(agentClass, data[:loginInfo], data[:coefficents])
+                                    agentIds, created = createAgents(agentClass, data)
                                     createdAgents.update(created) do 
                                                             |id, val1, val2| 
                                                              raise "duplicate in agentsCreatedupdate!"
@@ -45,19 +50,22 @@ def registerUser(password)
 	raise "timeout while registering." if s[0] == nil
 	
 	registerAnswer = StockPacketIn.new sock.recv_nonblock(512)
-	
+	sock.close()
 	case registerAnswer.id
 		when $packets[:REGISTER_USER_RESP_OK] then
 			packet = RegisterUserRespOk.new(registerAnswer.get)
-			puts "#{packet.user_id} registered succesfuly"
+			#puts "#{packet.user_id} registered succesfuly"
 		when $packets[:REGISTER_USER_RESP_FAIL] then
+			
 			packet = RegisterUserRespFail.new(registerAnswer.get)
 			raise "#{id} Register FAIL: #{packet.reason}"
 		else
 			raise "Either server send wrong message or protocol is flawed."
 			return false
 	end
+	
 	packet.user_id
+	
 end
 
 def createUserAccounts(count)
@@ -74,31 +82,43 @@ def createUserAccounts(count)
 	usersAccountsInfo
 end
 
+def runAsThreads(agentIds)
+	threads = {}
+	agentIds.each { |id, obj|
+							threads.merge! id => Thread.new {obj.start!}}
+	threads
+end
+
+
+def generateDataForAgent(agent, count)
+	r = Random.new
+	data  = []
+	#puts IrrationalPanicAgent.generateRandomCoef(r)
+	#puts "#{agent}"
+	createUserAccounts(count).each { |id, password|
+					data << [id, password, agent.generateRandomCoef(r)]
+	}
+	data
+end
+
 
 def startUniverse
-	data = { :sleep_time => 0.3, 
-			 :max_idle => 5}	
 			 
-	count = 1000
-	
-	agentsData = {SimpleAgent => {:coefficents => data, :loginInfo => createUserAccounts(count)}}
+	count = 40	
+	agentsData = {IrrationalPanicAgent => generateDataForAgent(IrrationalPanicAgent, count)}
 	
 	
 	agentIds, createdAgents = createUniverse(agentsData)
 	
-	puts "Created Agents: #{SimpleAgent}  =>  #{createdAgents[SimpleAgent]}"
+	createdAgents.each { |agent_name, amount| puts "Created Agents: #{agent_name}  =>  #{amount}"}
 	
-	threads = {}
+	threads = runAsThreads(agentIds)
 	
-	agentIds.each do |id, obj|
-						threads.merge! id => Thread.new {obj.start!}
-					end
-					
-	threads.each do |id, th| 
-							th.join()
-					end
+	puts "threads created: #{agentIds.length}"
 	
-end
+	threads.each {|id, th| th.join()}
+	
+end 
 
 startUniverse
 
