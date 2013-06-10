@@ -52,7 +52,7 @@ class SimpleAgent
 		@socket.print GetMyOrders.new.forge
 		
 		sock, = IO.select [@socket], [], [], 3
-		if sock[0] == nil
+		if sock == nil
 			puts "Timeout!"
 			return false
 		end
@@ -139,7 +139,7 @@ class SimpleAgent
 		@socket.print GetMyStocks.new.forge
 		
 		sock, = IO.select [@socket], [], [], 3
-		if sock[0] == nil
+		if sock == nil
 			puts "Timeout!"
 			return false
 		end
@@ -167,7 +167,7 @@ class SimpleAgent
 		@socket.print GetMyOrders.new.forge
 		
 		sock, = IO.select [@socket], [], [], 3
-		if sock[0] == nil
+		if sock == nil
 			puts "Timeout!"
 			return false
 		end
