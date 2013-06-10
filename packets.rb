@@ -1,3 +1,5 @@
+require 'stock.rb'
+
 $packets = {
     :REGISTER_USER_REQ      => 0,
     :REGISTER_USER_RESP_OK  => 1,
@@ -68,7 +70,7 @@ class StockPacketOut < StockPacket
   end
 
   def forge_final
-    puts "Trying to send: #{@bytearray.unpack('c*')}"
+    #puts "Trying to send: #{@bytearray.unpack('c*')}"
     [@bytearray.length].pack('s>') + @bytearray
   end
 end
@@ -80,6 +82,7 @@ class StockPacketIn < StockPacket
     @bytearray  = bytestring.unpack('c*')
     @offset     = 0
     @packetlen  = self.pull('short')
+    @bytearray = @bytearray[0..(@packetlen+2)]
     @id         = self.pull('byte')
   end
 
@@ -377,18 +380,6 @@ class CompanyStatus <StockPacketOut
 end
 
 
-class BestOrder <StockPacketIn
-  attr_reader :stock_id, :amount, :price
-  def initialize(bytestring)
-    super(bytestring)
-    @type     = self.pull('byte')
-    @stock_id = self.pull('int')
-    @amount   = self.pull('int')
-    @price    = self.pull('int')
-  end
-end
-
-
 
 class CompanyActive <StockPacketIn
   attr_reader :stock_id
@@ -422,16 +413,6 @@ class GetStocks <StockPacketOut
 end
 
 
-class StockInfo <StockPacketIn
-  attr_reader :stock_id, :amount
-  def initialize(bytestring)
-    super(bytestring)
-    @stock_id = self.pull('int')
-    @amount   = self.pull('int')
-  end
-end
-
-
 class GetMyOrders <StockPacketOut
 
   def initialize
@@ -460,7 +441,9 @@ class GetMyStocksResp <StockPacketIn
     @stock_count = self.pull('int')
     @stockhash = {}
     @stock_count.times do |i|
-      @stockhash[self.pull('int')] = self.pull('int')
+      stock_id = self.pull('int')
+      amount   = self.pull('int')
+      @stockhash[stock_id] = Stock.new(stock_id, amount)
     end
   end
 end
@@ -495,7 +478,7 @@ end
 class GetStockInfoResp <StockPacketIn
   attr_reader :stock_id, :buy_price,  :buy_amount,
                          :sell_price, :sell_amount,
-                         :transaction_price, :transaction_amount
+                         :transaction_price, :transaction_amount, :transaction_date
 
   def initialize(bytestring)
     super(bytestring)
@@ -504,8 +487,13 @@ class GetStockInfoResp <StockPacketIn
     @buy_amount = self.pull('int')
     @sell_price = self.pull('int')
     @sell_amount = self.pull('int')
-    @transaction_price = self.pull('int')
+    @transaction_price  = self.pull('int')
     @transaction_amount = self.pull('int')
+    @transaction_date   = self.pull_len('string',self.pull('short'))
+  end
+
+  def to_s
+    "#Stock info: ID=#{@stock_id} | buy order: p=#{@buy_price}, a=#{@buy_amount} | sell order: p=#{@sell_price}, a=#{@sell_amount} transaction: p=#{@transaction_price}, a=#{@transaction_amount}"
   end
 end
 

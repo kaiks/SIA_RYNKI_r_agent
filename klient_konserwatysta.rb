@@ -1,136 +1,237 @@
-require 'klient.rb'
+require './klient.rb'
 
 class DumbClient < SClient
+
   def initialize(password=nil, user_id=0)
-    super(password,user_id)
+    @rng = Random.new
     @panic_thread = nil
-    @selling_price = {}
-    @stock_info = {}
+    @stock = {}
+    $csv.each_key { |k| @stock[k] = StockInfo.new }
+
+    super(password, user_id)
   end
 
-  def on_register_user_resp_ok packet
-  end
 
-  def on_register_user_resp_fail packet
-
-  end
 
   def on_login_user_resp_ok packet
-    send_data GetMyStocks.new.forge
-    send_data GetMyOrders.new.forge
-    #send_data GetMyOrders.new.forge
+    @threads << Thread.new {
+      loop {
+        sleep(@rng.rand(10 .. 20))
+        send GetMyStocks.new.forge
+        send GetMyOrders.new.forge
+      }
+    }
   end
 
-  def on_login_user_resp_fail packet
 
-  end
 
   def on_sell_transaction packet
     say 'Ka ching! (sold stuff)'
-    send_data GetMyStocks.new.forge
-    send_data GetMyOrders.new.forge
+    send GetMyStocks.new.forge
+    send GetMyOrders.new.forge
   end
+
+
 
   def on_buy_transaction packet
     say 'Ka ching! (bought stuff)'
-    send_data GetMyStocks.new.forge
-    send_data GetMyOrders.new.forge
+    send GetMyStocks.new.forge
+    send GetMyOrders.new.forge
   end
+
+
 
   def on_transaction_change packet
-
+    @stock[packet.stock_id].fromTransactionChange packet
   end
 
-  def on_order packet
-     #GetMyStocks.new.forge
-  end
 
-  def on_best_order packet
-    send_data GetStockInfo.new(packet.stock_id).forge
-  end
 
   def on_get_my_stocks_resp packet
     say "My stocks: #{@my_stocks.to_s}"
-    @my_stocks.each_key{ |k|
-      if k > 1
-        send_data GetStockInfo.new(k).forge
-        send_data SubscribeStock.new(k).forge
+    @my_stocks.each_key { |stock_id|
+      if stock_id > 1
+
+        if @stock[stock_id].initialized==true
+          buy_for(stock_id, @stock[stock_id].sell_price, 0.5)
+        else
+          send SubscribeStock.new(stock_id).forge
+          send GetStockInfo.new(stock_id).forge
+          next
+        end
+
       end
     }
   end
+
+
 
   def on_get_my_orders_resp packet
     say "My orders: #{@my_orders.to_s}"
     @my_orders.each do |order|
-      say "Now doing order #{order.to_s}"
-      if order[0]==2 || order[0]=='2'
-        send_data GetStockInfo.new(order[2]).forge
-        fix_selling_price(order[2],(1.1*order[4]).to_i)
-        say "Hey, let's get more of #{order[2]}"
-        EventMachine.add_timer(30) { panic_sell(order) }
-        EventMachine.add_timer(rand(5)+1) { get_more_stock(order[2]) }
+      #say "Now doing order #{order.to_s}"
+      if @stock[order[2]].checkInitialized { send GetStockInfo.new(order[2]).forge } == false
+        next
+      end
+
+      if order[0].to_i==2
+        sell_order_action(order)
+      elsif order[0].to_i==1
+        buy_order_action(order)
+      else
+        raise 'Wrong order type'
       end
     end
-    #@my_orders.each{|order| say order.to_s }
   end
+
+
+
+  def sell_order_action(order)
+    @stock[order[2]].i_sold_for = order[4]
+
+    #20% Szansy na panike
+    1.in(4) {
+      timer( @rng.rand(2.0 .. 20.0) ) {
+        cancel_order(order[1])
+        panic_sell(order[2])
+      }
+    }
+
+    timer( @rng.rand(1 .. 5) ) {
+      say "Hey, let's get more of #{order[2]}"
+      get_more_stock(order[2])
+    }
+  end
+
+
+
+  def buy_order_action(order)
+    @stock[order[2]].i_bought_for = order[4]
+
+    timer( @rng.rand(2.0 .. 20.0) ) {
+      cancel_order(order[1]) if order[3]>2
+      sleep(0.1)
+
+      randval = @rng.rand(4)
+      if randval == 0
+        buy_for(order[2], @rng.rand(1.1 .. 1.5) * @stock[order[2]].i_bought_for, 0.5)
+      else
+        get_more_stock(order[2], true)
+      end
+    }
+  end
+
+
 
   def on_get_stock_info_resp packet
-    say "Stock info: #{packet.inspect}"
-    @stock_info[packet.stock_id] = [packet.buy_price, packet.buy_amount,
-                                    packet.sell_price, packet.sell_amount,
-                                    packet.transaction_price, packet.transaction_amount]
+    stock = packet.stock_id
+    say "Stock info: #{packet.to_s}"
 
-    fix_selling_price(packet.stock_id, @stock_info[packet.stock_id][0] )
+    @stock[stock].fromStockInfo packet
 
-    EventMachine.add_timer(rand(5)+1) {
-      sell_stock_all(packet.stock_id, fix_selling_price(packet.stock_id,packet.sell_price*1.1) ) #10% trzeba ugrac!
+    timer( @rng.rand(1 .. 5) ) {
+      sell_stock_all(stock, fix_selling_price(stock, packet.sell_price*1.1)) #10% trzeba ugrac!
     }
   end
 
 
-  def fix_selling_price(stock_id,price)
-    if @selling_price.has_key? stock_id
-      return @selling_price[stock_id]
+
+  def on_best_order packet
+    @stock[packet.stock_id].fromBestOrder packet
+  end
+
+
+
+  def fix_selling_price(stock_id, price)
+    if @stock[stock_id].i_sold_for.to_i > 0
+      @stock[stock_id].i_sold_for
     else
-      @selling_price[stock_id] = price.to_i
+      if @stock[stock_id].sell_price.to_i > 0 #ja sprzedam po tyle po ile ktos inny sprzeda
+        @stock[stock_id].i_sold_for = @stock[stock_id].sell_price
+      else
+        @stock[stock_id].i_sold_for = price
+      end
     end
   end
+
+
 
   def sell_stock_all(stock_id, price, pkc=false)
-    amount = self.stock_amount stock_id
-    selling_for = fix_selling_price(stock_id,price)
-
-    if pkc==true
-      selling_for=1
-    end
-
-    sell(stock_id,amount, selling_for )
-
-    get_more_stock(stock_id)
-
-  end
-
-  def get_more_stock(stock_id)
-    say "Trying to get more of #{stock_id}"
-    if stock_amount(1) >= @selling_price[stock_id]
-      buy(stock_id,(stock_amount(1)/@selling_price[stock_id]*0.95).to_i,(@selling_price[stock_id]*0.95).to_i)
+    say "Sell all: #{stock_id} #{price.to_i}"
+    amount = stock(stock_id).amount
+    selling_price = [1, price].max
+    if pkc
+      say 'PKC sell'
+      selling_price=1
     else
-      say 'Wanted to buy but no dice'
+      @stock[stock_id].i_sold_for = price
+    end
+    sell(stock_id, amount, selling_price)
+  end
+
+
+
+  def buy_for(stock, price, perc=1.00)
+    say "Buy for: #{stock} #{price}"
+    if price.to_i>0
+      @stock[stock].i_bought_for = price
+      buy(stock, (perc*cash/price).to_i, price)
+    else
+      say "Couldn\'t buy #{stock} (price is 0)"
     end
   end
 
-  def panic_sell(order)
-    send_data CancelOrderReq.new(order[1]).forge
-    send_data GetMyStocks.new.forge
-    @selling_price[order[2]] *= 0.9
-    EventMachine.add_timer(rand(5)+1) {
-      sell_stock_all(order[2],@selling_price[order[2]],true)
+
+  def orders_for_stock(stock)
+    @my_orders.select { |order| order[2] }
+  end
+
+
+
+  def get_more_stock(stock_id, pkc=false)
+    if @stock[stock_id].initialized
+      say "get_more_stock #{stock_id}. SP=#{@stock[stock_id].sell_price}"
+      buying_price = @stock[stock_id].sell_price
+
+
+      if pkc
+        say 'buy pkc'
+        buying_price = [2*buying_price, [buying_price, cash].max].min
+      end
+
+
+      if cash >= buying_price
+        buy_for(stock_id, buying_price)
+      else
+        say "Wanted to buy but no dice. #{cash}<#{buying_price}"
+      end
+
+    else
+      say 'Can\'t get more stock. Uninitialized!'
+    end
+  end
+
+
+
+  def panic_sell(stock_id)
+    @stock[stock_id].i_sold_for *= 0.9
+
+    timer( @rng.rand(1 .. 5) ) {
+      sell_stock_all(stock_id, @stock[stock_id].i_sold_for, true)
     }
   end
+
+
 end
 
-EventMachine.run {
-  20.times { |i|
-    EventMachine.connect '127.0.0.1', 12345, DumbClient, '%06d' %(i+2), i+2
+@klienci = []
+rng = Random.new
+ARGV[1].to_i.times { |i|
+  @klienci << Thread.new {
+    sleep( rng.rand(0.0 .. 100.0) )
+    DumbClient.new('%06d' %(i+2+ARGV[0].to_i), i+2+ARGV[0].to_i)
   }
+  sleep(0.2)
 }
+
+sleep(1000000)
