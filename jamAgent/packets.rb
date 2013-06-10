@@ -1,35 +1,35 @@
 $packets = {
-    :REGISTER_USER_REQ      	=> 0,
-    :REGISTER_USER_RESP_OK  	=> 1,
-    :REGISTER_USER_RESP_FAIL    => 2,
-    :LOGIN_USER_REQ 			=> 3,
-    :LOGIN_USER_RESP_OK     	=> 4,
-    :LOGIN_USER_RESP_FAIL   	=> 5,
-    :UNRECOGNIZED_USER      	=> 6,
-    :SELL_STOCK_REQ         	=> 20,
-    :BUY_STOCK_REQ  			=> 21,
-    :BUY_TRANSACTION        	=> 22,
-    :SELL_TRANSACTION       	=> 23,
-    :TRANSACTION_CHANGE     	=> 24,
-    :ORDER						=> 25,
-    :BEST_ORDER					=> 26,
-    :SUBSCRIBE_STOCK        	=> 27,
-    :UNSUBSCRIBE_STOCK      	=> 28,
-    :GET_MY_STOCKS  			=> 29,
-    :GET_MY_STOCKS_RESP    		=> 30,
-    :GET_MY_ORDERS  			=> 31,
-    :GET_MY_ORDERS_RESP    		=> 32,
-    :GET_STOCK_INFO 			=> 33,
-    :GET_STOCK_INFO_RESP    	=> 34,
-    :CANCEL_ORDER_REQ       	=> 35,
-    :COMPANY_STATUS_REQ     	=> 40,
-    :COMPANY_ACTIVE_RESP    	=> 41,
-    :COMPANY_FROZEN_RESP    	=> 42,
-    :SESSION_STARTED        	=> 43,
-    :SESSION_CLOSED 			=> 44,
-    :IS_SESSION_ACTIVE    	  	=> 45,
-    :SESSION_STATUS 			=> 46,
-    :UNDEFINED            		=> 100
+    :REGISTER_USER_REQ      => 0,
+    :REGISTER_USER_RESP_OK  => 1,
+    :REGISTER_USER_RESP_FAIL        => 2,
+    :LOGIN_USER_REQ => 3,
+    :LOGIN_USER_RESP_OK     => 4,
+    :LOGIN_USER_RESP_FAIL   => 5,
+    :UNRECOGNIZED_USER      => 6,
+    :SELL_STOCK_REQ         => 20,
+    :BUY_STOCK_REQ  => 21,
+    :BUY_TRANSACTION        => 22,
+    :SELL_TRANSACTION       => 23,
+    :TRANSACTION_CHANGE     => 24,
+    :ORDER  => 25,
+    :BEST_ORDER     => 26,
+    :SUBSCRIBE_STOCK        => 27,
+    :UNSUBSCRIBE_STOCK      => 28,
+    :GET_MY_STOCKS  => 29,
+    :GET_MY_STOCKS_RESP     => 30,
+    :GET_MY_ORDERS  => 31,
+    :GET_MY_ORDERS_RESP     => 32,
+    :GET_STOCK_INFO => 33,
+    :GET_STOCK_INFO_RESP    => 34,
+    :CANCEL_ORDER_REQ       => 35,
+    :COMPANY_STATUS_REQ     => 40,
+    :COMPANY_ACTIVE_RESP    => 41,
+    :COMPANY_FROZEN_RESP    => 42,
+    :SESSION_STARTED        => 43,
+    :SESSION_CLOSED => 44,
+    :IS_SESSION_ACTIVE      => 45,
+    :SESSION_STATUS => 46,
+    :UNDEFINED            => 100
 }
 
 class StockPacket
@@ -259,13 +259,13 @@ class SellStockReq < StockPacketOut
 end
 
 
-# Changed stock_id => order_id 
+
 class SellTransaction < StockPacketIn
-  attr_reader :order_id, :amount
+  attr_reader :stock_id, :amount
 
   def initialize(bytestring)
     super(bytestring)
-    @order_id = self.pull('int')
+    @stock_id = self.pull('int')
     @amount = self.pull('int')
   end
 end
@@ -289,13 +289,13 @@ class BuyStockReq < StockPacketOut
   end
 end
 
-# Changed stock_id => order_id 
+
 class BuyTransaction < StockPacketIn
-  attr_reader :order_id, :amount
+  attr_reader :stock_id, :amount
 
   def initialize(bytestring)
     super(bytestring)
-    @order_id = self.pull('int')
+    @stock_id = self.pull('int')
     @amount = self.pull('int')
   end
 end
