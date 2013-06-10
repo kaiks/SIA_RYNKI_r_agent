@@ -1,109 +1,73 @@
-require 'rubygems'
-
-require 'packets.rb'
-require 'probability'
-require 'csvreader.rb'
-require 'socket'
-require 'worker.rb'
-
 $host = 'localhost'
 $port = 12345
 
-class StockInfo
-  attr_accessor :buy_price, :buy_amount, :sell_price, :sell_amount,
-                :transaction_price, :transaction_amount,
-                :i_bought_for, :i_sold_for, :initialized, :asked_for
-  def initialize
-    @initialized = false
-    @asked_for = false
-  end
-
-  def fromStockInfo packet
-    @buy_price  = packet.buy_price
-    @buy_amount = packet.buy_amount
-    @sell_price = packet.sell_price
-    @sell_amount = packet.sell_amount
-    @transaction_price = packet.transaction_price
-    @transaction_amount = packet.transaction_amount
-    @i_bought_for ||= (@sell_price).to_i
-    @i_sold_for  ||= (@i_bought_for*1.1).to_i
-    @initialized = true
-  end
-
-  def fromBestOrder packet
-    if packet.type.to_i==1
-      @buy_price = packet.price
-      @buy_amount = packet.amount
-    else
-      @sell_price = packet.price
-      @buy_amount = packet.amount
-    end
-  end
-
-  def fromTransactionChange packet
-    @transaction_price = packet.price
-    @transaction_amount = packet.amount
-  end
-
-  def askFor(&block)
-    block
-    @asked_for=true
-  end
-
-  def checkInitialized(&block)
-    unless @asked_for==true
-      askFor { block }
-    end
-    @initialized
-  end
-
-end
+require 'rubygems'
+require 'probability'
 
 
+require 'set'
+require 'socket'
 
 
+require 'csvreader.rb'
+require 'packets.rb'
+require 'stock_info.rb'
 
 
-
-
-
-
-
+Thread.abort_on_exception = true
 
 
 
 class SClient
 
   def initialize(password=nil, user_id=0)
-    Thread.abort_on_exception=true
-    @id = user_id
+
+    @id       = user_id
     @password = password
-    @buffer = ''
-    @my_stocks = {}
-    @my_orders = []
-    @socket = TCPSocket.new 'localhost', 12345
-    @socket.setsockopt(Socket::IPPROTO_TCP,Socket::TCP_NODELAY,1)
-    @threads = []
-    @sendlock = Mutex.new
-    @debug = false
-    @worker = Worker.new
-    @last_received = Time.now #dumb congestion prevention?
-    @stocks_im_trading = Set.new
+
+    setup_socket
+    setup_variables
+
     post_init
   end
 
 
 
+  def setup_variables
+    @buffer    = ''
+    @my_stocks = Hash.new
+    @my_orders = Set.new
+    @threads   = Set.new
+    @sendlock  = Mutex.new
+    @debug     = false
+    @last_received     = Time.now #dumb congestion prevention
+  end
+
+
+
+  def setup_socket
+    @socket = TCPSocket.new $host, $port
+    @socket.setsockopt(Socket::IPPROTO_TCP,Socket::TCP_NODELAY,1)
+  end
+
+
+
   def run
-    Thread.abort_on_exception=true
     loop {
-      if @last_received < Time.now-30
-        raise 'No information in 30 seconds.'
-      end
+      check_connection_by_time
+
       data = @socket.readpartial(4096)
       receive_data data if data.to_s.length>0
+
       sleep(0.05)
     }
+  end
+
+
+  def check_connection_by_time
+    if @last_received < Time.now-30
+      raise 'No information in 30 seconds.'
+    end
   end
 
 
@@ -115,13 +79,28 @@ class SClient
       RegisterUserReq.new(@password).forge :
       LoginUserReq.new(@id, @password).forge
 
-    @loop_thread = Thread.new{ loop{ say "[LOOP] #{@my_stocks.to_s}"; sleep(5) } }
+    @threads << Thread.new{ display_stocks_loop } if @debug
+  end
+
+
+
+  def display_stocks_loop
+    loop{
+      say "[LOOP] #{@my_stocks.to_s}"
+      sleep(5)
+    }
+  end
+
+
+
+  def stock(id)
+    @my_stocks.fetch(id,NullStock.new)
   end
 
 
 
   def cash
-    @my_stocks[1]
+    stock(1).amount
   end
 
 
@@ -193,7 +172,7 @@ class SClient
         when $packets[:GET_MY_STOCKS_RESP] then
           packet = GetMyStocksResp.new(packet.get)
           @my_stocks = packet.stockhash
-          @my_stocks.each_key { |k| @stocks_im_trading.add(k) }
+          @my_stocks.each_value{ |stock| stock.trading = true }
           say "Received my stocks info #{@my_stocks.to_s}"
           on_get_my_stocks_resp(packet)
 
@@ -239,14 +218,8 @@ class SClient
 
 
 
-  def stock_amount stock_id
-    @my_stocks.fetch(stock_id, 0)
-  end
-
-
-
   def sell(stock_id, amount, price)
-    @stocks_im_trading.add(stock_id)
+    stock(stock_id).trading = true
     say "Let's sell #{amount} of #{stock_id} for #{price}"
 
     if amount*price == 0
@@ -254,12 +227,12 @@ class SClient
       return
     end
 
-    if stock_amount(stock_id) < amount
-      say "Can't sell #{amount} of #{stock_id}. I've got only #{stock_amount(stock_id)}!"
+    if stock(stock_id).amount < amount
+      say "Can't sell #{amount} of #{stock_id}. I've got only #{stock(stock_id).amount}!"
       return
     end
 
-    @my_stocks[stock_id] -= amount
+    stock(1).amount -= amount
 
     say "Selling: stock=#{stock_id} #{amount} for #{price}"
     send SellStockReq.new(stock_id, amount, price).forge
@@ -268,7 +241,7 @@ class SClient
 
 
   def buy(stock_id, amount, price)
-    @stocks_im_trading.add(stock_id)
+    stock(stock_id).trading = true
     say "Let's buy #{amount} of #{stock_id} for #{price}"
 
     if amount*price == 0
@@ -276,12 +249,12 @@ class SClient
       return
     end
 
-    if @my_stocks[1] < price*amount
+    if cash < price*amount
       say "Can't buy #{amount} of #{stock_id} for total of #{price*amount}. I've got only #{cash} cash!"
       return
     end
 
-    @my_stocks[1] -= price*amount
+    @my_stocks[1].amount -= price*amount
 
     say "Buying: stock=#{stock_id} #{amount} for #{price}"
     send BuyStockReq.new(stock_id, amount, price).forge
@@ -297,7 +270,7 @@ class SClient
 
 
   def timer(sec, &block)
-    Thread.new { Thread.abort_on_exception=true; sleep(sec); say 'Executing thread'; block.call }
+    Thread.new { sleep(sec); say 'Executing thread'; block.call }
   end
 
 

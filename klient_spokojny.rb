@@ -2,7 +2,6 @@ require 'klient.rb'
 
 class DumbClient < SClient
   def initialize(password=nil, user_id=0)
-    Thread.abort_on_exception=true
     @panic_thread = nil
     @stock = {}
     $csv.each_key { |k| @stock[k] = StockInfo.new }
@@ -17,7 +16,6 @@ class DumbClient < SClient
 
   def on_login_user_resp_ok packet
     @threads << Thread.new {
-      Thread.abort_on_exception=true
       loop {
         sleep(rand(10)+10)
         send GetMyStocks.new.forge
@@ -72,7 +70,7 @@ class DumbClient < SClient
   def buy_random_stock
     say 'Buying random stock'
     stock_id = rand(2..21)
-    unless @stocks_im_trading.include? stock_id
+    unless stock(stock_id).trading
       send GetStockInfo.new(stock_id).forge
       buy(stock_id,1,cash)
     end
@@ -88,16 +86,16 @@ class DumbClient < SClient
   def on_get_stock_info_resp packet
     say "Stock info: #{packet.to_s}"
 
-    establish_price=false
+    must_establish_price=false
 
     if @stock[packet.stock_id].initialized==false
       say 'stock uninitialized'
-      establish_price=true
+      must_establish_price=true
     end
 
     @stock[packet.stock_id].fromStockInfo packet
 
-    if (establish_price==true) or (@stock[packet.stock_id].i_sold_for.to_i == 0) or (@stock[packet.stock_id].i_bought_for.to_i == 0)
+    if (must_establish_price) or (@stock[packet.stock_id].i_sold_for.to_i == 0) or (@stock[packet.stock_id].i_bought_for.to_i == 0)
       say 'change prices'
       @stock[packet.stock_id].i_sold_for = (packet.sell_price)*(1.0+@expected_bargain)
       @stock[packet.stock_id].i_bought_for = (packet.buy_price)*(1.0+@expected_gain)
@@ -126,7 +124,7 @@ class DumbClient < SClient
 
   def sell_stock_all(stock_id, price, pkc=false)
     say "Sell all: #{stock_id} #{price.to_i}"
-    amount = self.stock_amount stock_id
+    amount = stock(stock_id).amount
     selling_price = [1, price].max
     if pkc
       say 'PKC sell'
@@ -155,7 +153,6 @@ end
 
 88.times { |i|
   @klienci << Thread.new {
-    Thread.abort_on_exception=true
     sleep(1.0*rand(100)/10.0)
     DumbClient.new('%06d' %(i+402), i+402)
     #EventMachine.connect '127.0.0.1', 12345, DumbClient, '%06d' %(i+2), i+2

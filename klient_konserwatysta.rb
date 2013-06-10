@@ -15,7 +15,6 @@ class DumbClient < SClient
 
   def on_login_user_resp_ok packet
     @threads << Thread.new {
-      Thread.abort_on_exception=true
       loop {
         sleep(@rng.rand(10 .. 20))
         send GetMyStocks.new.forge
@@ -50,14 +49,14 @@ class DumbClient < SClient
 
   def on_get_my_stocks_resp packet
     say "My stocks: #{@my_stocks.to_s}"
-    @my_stocks.each_key { |k|
-      if k>1
+    @my_stocks.each_key { |stock_id|
+      if stock_id > 1
 
-        if @stock[k].initialized==true
-          buy_for(k, @stock[k].sell_price, 0.5)
+        if @stock[stock_id].initialized==true
+          buy_for(stock_id, @stock[stock_id].sell_price, 0.5)
         else
-          send SubscribeStock.new(k).forge
-          send GetStockInfo.new(k).forge
+          send SubscribeStock.new(stock_id).forge
+          send GetStockInfo.new(stock_id).forge
           next
         end
 
@@ -159,7 +158,7 @@ class DumbClient < SClient
 
   def sell_stock_all(stock_id, price, pkc=false)
     say "Sell all: #{stock_id} #{price.to_i}"
-    amount = stock_amount stock_id
+    amount = stock(stock_id).amount
     selling_price = [1, price].max
     if pkc
       say 'PKC sell'
@@ -197,14 +196,14 @@ class DumbClient < SClient
 
       if pkc
         say 'buy pkc'
-        buying_price = [2*buying_price, [buying_price, @my_stocks[1]].max].min
+        buying_price = [2*buying_price, [buying_price, cash].max].min
       end
 
 
       if cash >= buying_price
         buy_for(stock_id, buying_price)
       else
-        say "Wanted to buy but no dice. #{stock_amount(1)}<#{buying_price}"
+        say "Wanted to buy but no dice. #{cash}<#{buying_price}"
       end
 
     else
@@ -229,7 +228,6 @@ end
 rng = Random.new
 ARGV[1].to_i.times { |i|
   @klienci << Thread.new {
-    Thread.abort_on_exception=true
     sleep( rng.rand(0.0 .. 100.0) )
     DumbClient.new('%06d' %(i+2+ARGV[0].to_i), i+2+ARGV[0].to_i)
   }

@@ -1,3 +1,5 @@
+require 'stock.rb'
+
 $packets = {
     :REGISTER_USER_REQ      => 0,
     :REGISTER_USER_RESP_OK  => 1,
@@ -439,7 +441,9 @@ class GetMyStocksResp <StockPacketIn
     @stock_count = self.pull('int')
     @stockhash = {}
     @stock_count.times do |i|
-      @stockhash[self.pull('int')] = self.pull('int')
+      stock_id = self.pull('int')
+      amount   = self.pull('int')
+      @stockhash[stock_id] = Stock.new(stock_id, amount)
     end
   end
 end
