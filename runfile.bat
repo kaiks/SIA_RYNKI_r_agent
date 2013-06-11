@@ -1,1 +1,1 @@
-jruby -Xerrno.backtrace=true -Xcompile.invokedynamic=true --server %*
+jruby -Xerrno.backtrace=true -Xcompile.invokedynamic=true -J-Xmn512m -J-Xms2048m -J-Xmx2048m -J-server --server %*

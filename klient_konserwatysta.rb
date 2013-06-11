@@ -1,16 +1,18 @@
+Thread.abort_on_exception = true
+
 require './klient.rb'
 
 class DumbClient < StockClient
 
-  def initialize(password=nil, user_id=0, gain = 0.1)
+  def initialize(password=nil, user_id=0, gain = nil)
     @stock = {}
     $csv.each_key { |k| @stock[k] = StockInfo.new }
-    @expected_gain = gain
 
     super(password, user_id)
+    @expected_gain = gain || random(0.02 .. 0.1)
+    @tolerable_loss = @expected_gain / 2.0 #loss aversion
     @debug = true
   end
-
 
 
   def on_login_user_resp_ok packet
@@ -24,13 +26,11 @@ class DumbClient < StockClient
   end
 
 
-
   def on_sell_transaction packet
     say 'Ka ching! (sold stuff)'
     send GetMyStocks.new.forge
     send GetMyOrders.new.forge
   end
-
 
 
   def on_buy_transaction packet
@@ -40,11 +40,9 @@ class DumbClient < StockClient
   end
 
 
-
   def on_transaction_change packet
     @stock[packet.stock_id].fromTransactionChange packet
   end
-
 
 
   def on_get_my_stocks_resp packet
@@ -86,37 +84,37 @@ class DumbClient < StockClient
   end
 
 
-
   def sell_order_action(order)
     @stock[order[2]].i_sold_for = order[4]
 
-    #20% Szansy na panike
-    1.in(4) {
-      timer( random(10.0 .. 20.0) ) {
+    # 10% szansy na chec sprzedazy
+    1.in(10) {
+      if @stock[order[2]].transaction_price < (1-@tolerable_loss) * @stock[order[2]].i_bought_for
         cancel_order(order[1])
         panic_sell(order[2])
+      end
+    }
+
+    1.in(5) { #greed
+      timer(random(1 .. 5)) {
+        say "Hey, let's get more of #{order[2]}"
+        get_more_stock(order[2])
       }
     }
-
-    timer( random(1 .. 5) ) {
-      say "Hey, let's get more of #{order[2]}"
-      get_more_stock(order[2])
-    }
   end
-
 
 
   def buy_order_action(order)
     @stock[order[2]].i_bought_for = order[4]
 
-    timer( random(2.0 .. 20.0) ) {
+    timer(random(2.0 .. 20.0)) {
       cancel_order(order[1]) if order[3]>2
       sleep(0.1)
 
       randval = random(4)
 
       if randval > 0
-        price = random(1.1 .. 1.5) * @stock[order[2]].i_bought_for
+        price = (1.0 - @expected_gain) * @stock[order[2]].i_bought_for
         buy_for(order[2], price, 0.5)
       else
         get_more_stock(order[2], true)
@@ -126,14 +124,13 @@ class DumbClient < StockClient
   end
 
 
-
   def on_get_stock_info_resp packet
     stock = packet.stock_id
     say "Stock info: #{packet.to_s}"
 
     @stock[stock].fromStockInfo packet
 
-    timer( random(1 .. 5) ) {
+    timer(random(1 .. 5)) {
       price = (1.0 + @expected_gain) * packet.sell_price
       #price = fix_selling_price(stock, price)
       sell_all_stocks(stock, price)
@@ -141,11 +138,9 @@ class DumbClient < StockClient
   end
 
 
-
   def on_best_order packet
     @stock[packet.stock_id].fromBestOrder packet
   end
-
 
 
   def fix_selling_price(stock_id, price)
@@ -161,12 +156,11 @@ class DumbClient < StockClient
   end
 
 
-
   def panic_sell(stock_id)
     @stock[stock_id].i_sold_for *= 0.9
 
-    timer( random(1 .. 5) ) {
-      sell_pkc(stock_id, stock(stock_id).amount )
+    timer(random(1 .. 5)) {
+      sell_pkc(stock_id, stock(stock_id).amount)
     }
   end
 
@@ -182,7 +176,6 @@ class DumbClient < StockClient
     @stock[stock].i_bought_for = price
     buy(stock, (perc*cash/price).to_i, price)
   end
-
 
 
   def get_more_stock(stock_id, pkc=false)
@@ -209,15 +202,13 @@ class DumbClient < StockClient
   end
 
 
-
 end
 
 @klienci = []
-rng = Random.new
-ARGV[1].to_i.times { |i|
+ARGV[0].to_i.times { |i|
   @klienci << Thread.new {
-    #sleep( rng.rand(0.0 .. 100.0) )
-    DumbClient.new('%06d' %(i+2+ARGV[0].to_i), i+2+ARGV[0].to_i)
+    sleep(rand(0.0 .. 100.0))
+    DumbClient.new('%06d' %(i+2+ARGV[0].to_i),0)
   }
   sleep(0.2)
 }

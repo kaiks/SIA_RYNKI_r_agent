@@ -454,7 +454,6 @@ class GetMyOrdersResp <StockPacketIn
     super(bytestring)
     @order_count = self.pull('int')
     @orderlist = []
-    #puts "Parsing... #{@order_count} items"
     @order_count.times do |i|
       order = []
       @orderlist += [[self.pull('byte'),self.pull('int'),self.pull('int'),self.pull('int'),self.pull('int')]]
@@ -489,7 +488,8 @@ class GetStockInfoResp <StockPacketIn
     @sell_amount = self.pull('int')
     @transaction_price  = self.pull('int')
     @transaction_amount = self.pull('int')
-    @transaction_date   = self.pull_len('string',self.pull('short'))
+    len = self.pull('short')
+    @transaction_date   = self.pull_len('string',len)
   end
 
   def to_s

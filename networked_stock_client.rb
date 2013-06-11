@@ -1,8 +1,18 @@
 require 'set'
 require 'socket'
+require 'packets.rb'
+require 'timeout'
+
+class NotMutex
+  def synchronize(&block)
+    block.call
+  end
+end
 
 class NetworkedStockClient
   def initialize(password=nil, user_id=0)
+    @reconnect_rescue = true
+
 
     @id       = user_id
     @password = password
@@ -14,32 +24,56 @@ class NetworkedStockClient
   end
 
   def setup_variables
-    @buffer    = ''
-    @my_stocks = Hash.new
-    @my_orders = Set.new
-    @threads   = Set.new
-    @sendlock  = Mutex.new
-    @debug     = false
-    @last_received     = Time.now #dumb congestion prevention
+    @buffer             = ''
+    @my_stocks          = Hash.new
+    @my_orders          = Set.new
+    @threads            = Set.new
+    @sendlock           = NotMutex.new
+    @debug              = false
+    @recv_loop_delay    = 0.1
+    @last_received      = Time.now #dumb congestion prevention
   end
 
 
 
   def setup_socket
-    @socket = TCPSocket.new $host, $port
-    @socket.setsockopt(Socket::IPPROTO_TCP,Socket::TCP_NODELAY,1)
+    begin
+      @socket = TCPSocket.new $host, $port
+      @socket.setsockopt(Socket::IPPROTO_TCP,Socket::TCP_NODELAY,1)
+    rescue
+      say '---------------CRITICAL EVENT: FAILED TO INTIALIZE SOCKET---------------'
+      setup_socket
+    end
   end
 
   def run
     loop {
-      check_connection_by_time
-
-      data = @socket.readpartial(4096)
+      puts 'receive loop'
+      data = ''
+      begin
+        Timeout::timeout(30) {
+          begin
+            data = @socket.readpartial(4096)
+          rescue
+            sleep(40)
+          end
+        }
+      rescue
+        @threads.each { |t| if t != Thread.current then Thread.kill(t) end }
+        begin
+          @socket.close
+        rescue
+          say 'couldnt close, whatevs'
+        end
+        say '---------------CRITICAL EVENT: LOST CONNECTION. RECONNECTING---------------'
+        initialize(@password, @id)
+      end
       receive_data data if data.to_s.length>0
 
-      sleep(0.05)
+      sleep(@recv_loop_delay)
     }
   end
+
 
 
   def check_connection_by_time
