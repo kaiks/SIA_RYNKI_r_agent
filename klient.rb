@@ -5,98 +5,60 @@ require 'rubygems'
 require 'probability'
 
 
-require 'set'
-require 'socket'
-
-
 require 'csvreader.rb'
-require 'packets.rb'
 require 'stock_info.rb'
+require 'networked_stock_client.rb'
 
 
 Thread.abort_on_exception = true
 
 
-
-class SClient
+class StockClient < NetworkedStockClient
 
   def initialize(password=nil, user_id=0)
-
-    @id       = user_id
-    @password = password
-
-    setup_socket
-    setup_variables
-
-    post_init
+    @rng = Random.new
+    @actions = {}
+    @actionlock = Mutex.new
+    @execution_delay = random(0.2 .. 10.0)
+    super(password, user_id)
+    @threads << Thread.new { display_stocks_loop } if @debug
+    @threads << Thread.new { do_actions_loop }
   end
 
 
-
-  def setup_variables
-    @buffer    = ''
-    @my_stocks = Hash.new
-    @my_orders = Set.new
-    @threads   = Set.new
-    @sendlock  = Mutex.new
-    @debug     = false
-    @last_received     = Time.now #dumb congestion prevention
+  def random(arg)
+    @rng.rand(arg)
   end
 
 
-
-  def setup_socket
-    @socket = TCPSocket.new $host, $port
-    @socket.setsockopt(Socket::IPPROTO_TCP,Socket::TCP_NODELAY,1)
-  end
-
-
-
-  def run
+  def do_actions_loop
     loop {
-      check_connection_by_time
-
-      data = @socket.readpartial(4096)
-      receive_data data if data.to_s.length>0
-
-      sleep(0.05)
+      say 'action loop'
+      sleep(@execution_delay)
+      @actionlock.synchronize {
+        @actions.sort.each { |v| v[1].call }
+        @actions = {}
+      }
     }
   end
 
 
-  def check_connection_by_time
-    if @last_received < Time.now-30
-      raise 'No information in 30 seconds.'
-    end
+  def action_id(action, stock_id)
+    action * 100 + stock_id
   end
-
-
-
-  def post_init
-    @threads << Thread.new { run }
-
-    send @id == 0 ?
-      RegisterUserReq.new(@password).forge :
-      LoginUserReq.new(@id, @password).forge
-
-    @threads << Thread.new{ display_stocks_loop } if @debug
-  end
-
 
 
   def display_stocks_loop
-    loop{
+    loop {
       say "[LOOP] #{@my_stocks.to_s}"
       sleep(5)
     }
   end
 
 
-
   def stock(id)
-    @my_stocks.fetch(id,NullStock.new)
+    @my_stocks.fetch(id, NullStock.new)
   end
-
 
 
   def cash
@@ -104,247 +66,137 @@ class SClient
   end
 
 
-
-  def receive_data(data)
-    say "received data #{data.length}"
-    @buffer += data.to_s
-
-    while @buffer.length > 2 do
-      @last_received = Time.now
-      packet = StockPacketIn.new(@buffer[0..32768])
-      say "packet len #{packet.packetlen}"
-
-      #zabezpieczenie przed fragmentacja
-      if packet.packetlen+2 > @buffer.length
-        say 'Packet not long enough'
-        break
-      end
-
-      @buffer = @buffer[(2+packet.packetlen)..@buffer.length].to_s
-
-      case packet.id
-        when $packets[:REGISTER_USER_RESP_OK] then
-          packet = RegisterUserRespOk.new(packet.get)
-          @id = packet.user_id
-          say "Registered: #{packet.user_id}"
-          send LoginUserReq.new(@id, @password).forge
-          on_register_user_resp_ok packet
-
-        when $packets[:REGISTER_USER_RESP_FAIL] then
-          packet = RegisterUserRespFail.new(packet.get)
-          say "Register FAIL: #{packet.reason}"
-          on_register_user_resp_fail packet
-
-        when $packets[:LOGIN_USER_RESP_OK] then
-          say 'Login OK'
-          on_login_user_resp_ok packet
-
-        when $packets[:LOGIN_USER_RESP_FAIL] then
-          packet = LoginUserRespFail.new(packet.get)
-          say "Login FAIL: #{packet.reason}"
-          on_login_user_resp_fail packet
-
-        when $packets[:SELL_TRANSACTION] then
-          packet = SellTransaction.new(packet.get)
-          say "Sell transaction: #{packet.stock_id} #{packet.amount}"
-          on_sell_transaction packet
-
-        when $packets[:BUY_TRANSACTION] then
-          packet = BuyTransaction.new(packet.get)
-          say "Buy transaction: #{packet.stock_id} #{packet.amount}"
-          on_buy_transaction packet
-
-        when $packets[:TRANSACTION_CHANGE] then
-          packet = TransactionChange.new(packet.get)
-          say "Transaction: #{packet.stock_id} #{packet.amount} #{packet.price} #{packet.date}"
-          on_transaction_change packet
-
-        when $packets[:ORDER] then
-          packet = Order.new(packet.get)
-          say "New order: #{packet.type} #{packet.stock_id} #{packet.amount} #{packet.price}"
-          on_order packet
-
-        when $packets[:BEST_ORDER] then
-          packet = BestOrder.new(packet.get)
-          say "New best order: #{packet.type} #{packet.stock_id} #{packet.amount} #{packet.price}"
-          self.on_best_order packet
-
-        when $packets[:GET_MY_STOCKS_RESP] then
-          packet = GetMyStocksResp.new(packet.get)
-          @my_stocks = packet.stockhash
-          @my_stocks.each_value{ |stock| stock.trading = true }
-          say "Received my stocks info #{@my_stocks.to_s}"
-          on_get_my_stocks_resp(packet)
-
-        when $packets[:GET_MY_ORDERS_RESP] then
-          packet = GetMyOrdersResp.new(packet.get)
-          @my_orders = packet.orderlist
-          say 'Received my orders info'
-          on_get_my_orders_resp packet
-
-        when $packets[:GET_STOCK_INFO_RESP] then
-          packet = GetStockInfoResp.new(packet.get)
-          say 'Received stock info'
-          on_get_stock_info_resp packet
-
-        else
-          say "Unknown packet: ID=#{packet.id} #{packet.bytearray}"
-
-      end
-    end
-  end
-
-
-
-  def send_data data
-    @sendlock.synchronize {
-      @socket.write data
-    }
-  end
-
-
-
   def send data
     send_data(data)
   end
 
 
-
-  def say something
-    if @debug
-      puts "#{Time.now} [#{@id.to_s}]: #{something}"
-    end
-  end
-
-
-
   def sell(stock_id, amount, price)
-    stock(stock_id).trading = true
-    say "Let's sell #{amount} of #{stock_id} for #{price}"
+    price = price.to_i
+    action_id = action_id(2, stock_id)
+    @actionlock.synchronize {
+      @actions[action_id] = lambda {
+        stock(stock_id).trading = true
+        say "Let's sell #{amount} of #{stock_id} for #{price}"
 
-    if amount*price == 0
-      say "[SELL] Invalid parameters. amount=#{amount} price=#{price}"
-      return
-    end
+        if amount*price == 0
+          say "[SELL] Invalid parameters. amount=#{amount} price=#{price}"
+          return
+        end
 
-    if stock(stock_id).amount < amount
-      say "Can't sell #{amount} of #{stock_id}. I've got only #{stock(stock_id).amount}!"
-      return
-    end
+        if stock(stock_id).amount < amount
+          say "Can't sell #{amount} of #{stock_id}. I've got only #{stock(stock_id).amount}!"
+          return
+        end
 
-    stock(1).amount -= amount
+        if price <= max_buying_price(stock_id)
+          say 'No point in selling stock. I\'m buying for less.'
+          return
+        end
 
-    say "Selling: stock=#{stock_id} #{amount} for #{price}"
-    send SellStockReq.new(stock_id, amount, price).forge
+        stock(1).amount -= amount
+
+        say "Selling: stock=#{stock_id} #{amount} for #{price}"
+        send(SellStockReq.new(stock_id, amount, price).forge)
+      }
+    }
   end
-
 
 
   def buy(stock_id, amount, price)
-    stock(stock_id).trading = true
-    say "Let's buy #{amount} of #{stock_id} for #{price}"
+    price = price.to_i
+    amount = amount.to_i
+    action_id = action_id(1, stock_id)
+    @actionlock.synchronize {
+      @actions[action_id] = lambda {
+        stock(stock_id).trading = true
+        say "Let's buy #{amount} of #{stock_id} for #{price}"
 
-    if amount*price == 0
-      say "[BUY] Invalid parameters. amount=#{amount} price=#{price}"
-      return
-    end
+        if amount*price == 0
+          say "[BUY] Invalid parameters. amount=#{amount} price=#{price}"
+          return
+        elsif amount*price > cash
+          say "Can't buy #{amount} of #{stock_id} for total of #{price*amount}. I've got only #{cash} cash!"
+          return
+        end
 
-    if cash < price*amount
-      say "Can't buy #{amount} of #{stock_id} for total of #{price*amount}. I've got only #{cash} cash!"
-      return
-    end
+        if price >= min_selling_price(stock_id)
+          say 'No point in buying stock. I\'m selling for less.'
+          return
+        end
 
-    @my_stocks[1].amount -= price*amount
+        @my_stocks[1].amount -= price*amount
 
-    say "Buying: stock=#{stock_id} #{amount} for #{price}"
-    send BuyStockReq.new(stock_id, amount, price).forge
+        say "Buying: stock=#{stock_id} #{amount} for #{price}"
+        send(BuyStockReq.new(stock_id, amount, price).forge) }
+    }
   end
-
 
 
   def cancel_order(id)
-    say "Cancel order #{id}"
-    send CancelOrderReq.new(id).forge
+    action_id = action_id(0, id)
+    @actionlock.synchronize {
+      @actions[action_id] = lambda {
+        if @my_orders.select{ |order| order[1] == id}.length==1
+          say "Cancel order #{id}"
+          send(CancelOrderReq.new(id).forge)
+        else
+          say "Cant cancel order (unavailable)"
+        end
+      }
+    }
   end
-
 
 
   def timer(sec, &block)
-    Thread.new { sleep(sec); say 'Executing thread'; block.call }
+    Thread.new {
+      sleep(sec)
+      say 'Executing thread'
+      block.call
+    }
   end
 
 
+  def my_orders_for_stock(stock, type=nil)
+    orders = @my_orders.select { |order| order[2]==stock }
 
-  def on_register_user_resp_ok packet
+    unless type.nil?
+      orders.select! { |order| order[1] == type }
+    end
 
+    orders
   end
 
 
-
-  def on_register_user_resp_fail packet
-
+  def cancel_orders(stock_id, type=nil)
+    my_orders_for_stock(stock_id, type).each { |order|
+      cancel_order(order[2])
+    }
   end
 
 
-
-  def on_login_user_ok packet
-
+  def min_selling_price(stock_id)
+    my_orders_for_stock(stock_id, 2).map { |order| order[4] }.min || 99999999999
   end
 
 
-
-  def on_login_user_resp_fail packet
-
+  def max_buying_price(stock_id)
+    my_orders_for_stock(stock_id, 1).map { |order| order[4] }.max || 0
   end
 
 
+  def sell_all_stocks(stock_id, price)
+    price = price.to_i
+    say "Sell all: #{stock_id} #{price.to_i}"
+    amount = stock(stock_id).amount
+    selling_price = [1, price].max
 
-  def on_sell_transaction packet
-
+    sell(stock_id, amount, selling_price)
   end
 
 
-
-  def on_buy_transaction packet
-
+  def sell_pkc(stock_id, amount)
+    sell(stock_id, amount, 1)
   end
-
-
-
-  def on_transaction_change packet
-
-  end
-
-
-
-  def on_order packet
-
-  end
-
-
-
-  def on_best_order packet
-
-  end
-
-
-
-  def on_get_my_stocks_resp packet
-
-  end
-
-
-
-  def on_get_my_orders_resp packet
-
-  end
-
-
-
-  def on_get_stock_info_resp packet
-
-  end
-
-
 
 end

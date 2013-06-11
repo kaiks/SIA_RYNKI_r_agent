@@ -1,6 +1,6 @@
 require 'klient.rb'
 
-class BossClient < SClient
+class BossClient < StockClient
   def initialize(password=nil, user_id=0)
     super(password,user_id)
   end
@@ -46,7 +46,7 @@ class BossClient < SClient
       order = BuyStockReq.new
       #say "Trying to buy #{stock['id_zasobu']} #{stock}"
       order.stock_id = stock['id_zasobu']
-      order.amount = 300
+      order.amount = 500
       order.price = stock['cena']-5
       send order.forge
     }
@@ -57,7 +57,7 @@ class BossClient < SClient
       order = SellStockReq.new
       #say "Trying to sell #{stock['id_zasobu']} #{stock}"
       order.stock_id = stock['id_zasobu']
-      order.amount = 300
+      order.amount = 500
       order.price = stock['cena']+5
       #puts "!! #{order.forge.unpack('C*')}"
       send order.forge

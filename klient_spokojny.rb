@@ -1,15 +1,16 @@
+Thread.abort_on_exception = true
+
 require 'klient.rb'
 
-class DumbClient < SClient
+class DumbClient < StockClient
   def initialize(password=nil, user_id=0)
-    @panic_thread = nil
     @stock = {}
     $csv.each_key { |k| @stock[k] = StockInfo.new }
-    @expected_gain = 0.05+1.0*rand(25)/100
-    @expected_bargain = -(0.05+1.0*rand(25)/100)
-    say "Expected gain: #{@expected_gain} bargain: #{@expected_bargain}"
-    @debug = true
     super(password, user_id)
+    @expected_gain = random(0.01 .. 0.25)
+    @greedy_gain   = 1.5
+    @expected_bargain = -random(0.01 .. 0.25)
+    say "Expected gain: #{@expected_gain.to_s} bargain: #{@expected_bargain.to_s}"
     @debug = true
   end
 
@@ -17,7 +18,7 @@ class DumbClient < SClient
   def on_login_user_resp_ok packet
     @threads << Thread.new {
       loop {
-        sleep(rand(10)+10)
+        sleep(random(10)+10)
         send GetMyStocks.new.forge
         send GetMyOrders.new.forge
       }
@@ -50,11 +51,8 @@ class DumbClient < SClient
         if @stock[k].initialized && (@stock[k].i_sold_for.to_i > 0) && (@stock[k].i_bought_for.to_i > 0)
           say "SI ISF #{@stock[k].i_sold_for}"
           say "SI IBF #{@stock[k].i_bought_for}"
-          timer(60) {
-            buy_for(k, @stock[k].i_sold_for, 0.5)
-            buy_for(k, 1.5*@stock[k].i_sold_for, 0.5)
-            sell_stock_all(k,@stock[k].i_bought_for)
-          }
+          buy_for(k, @stock[k].i_bought_for, 0.5)
+          sell_all_stocks(k,@stock[k].i_sold_for)
         else
           send SubscribeStock.new(k).forge
         end
@@ -69,8 +67,8 @@ class DumbClient < SClient
 
   def buy_random_stock
     say 'Buying random stock'
-    stock_id = rand(2..21)
-    unless stock(stock_id).trading
+    stock_id = random(2 .. 21)
+    unless stock(stock_id).trading?
       send GetStockInfo.new(stock_id).forge
       buy(stock_id,1,cash)
     end
@@ -88,7 +86,7 @@ class DumbClient < SClient
 
     must_establish_price=false
 
-    if @stock[packet.stock_id].initialized==false
+    unless @stock[packet.stock_id].initialized
       say 'stock uninitialized'
       must_establish_price=true
     end
@@ -96,9 +94,10 @@ class DumbClient < SClient
     @stock[packet.stock_id].fromStockInfo packet
 
     if (must_establish_price) or (@stock[packet.stock_id].i_sold_for.to_i == 0) or (@stock[packet.stock_id].i_bought_for.to_i == 0)
-      say 'change prices'
-      @stock[packet.stock_id].i_sold_for = (packet.sell_price)*(1.0+@expected_bargain)
-      @stock[packet.stock_id].i_bought_for = (packet.buy_price)*(1.0+@expected_gain)
+      say "Change prices: EG #{@expected_gain} EB #{@expected_bargain}"
+      say "...#{packet.sell_price}"
+      @stock[packet.stock_id].i_sold_for = (packet.sell_price)*(1.0+@expected_gain)
+      @stock[packet.stock_id].i_bought_for = (packet.buy_price)*(1.0+@expected_bargain)
     end
 
   end
@@ -109,40 +108,18 @@ class DumbClient < SClient
   end
 
 
-  def fix_selling_price(stock_id, price)
-    if @stock[stock_id].i_sold_for.to_i > 0
-      @stock[stock_id].i_sold_for
-    else
-      if @stock[stock_id].sell_price.to_i > 0 #ja sprzedam po tyle po ile ktos inny sprzeda
-        @stock[stock_id].i_sold_for = @stock[stock_id].sell_price
-      else
-        @stock[stock_id].i_sold_for = $csv[stock_id]['cena']*1.05
-      end
-    end
-  end
-
-
-  def sell_stock_all(stock_id, price, pkc=false)
-    say "Sell all: #{stock_id} #{price.to_i}"
-    amount = stock(stock_id).amount
-    selling_price = [1, price].max
-    if pkc
-      say 'PKC sell'
-      selling_price=1
-    end
-    sell(stock_id, amount, selling_price)
-  end
 
   def buy_for(stock, price, perc=1.00)
     say "Buy for: #{stock} #{price}"
     buy(stock, (perc*cash/price).to_i, price)
   end
 
+
   def panic_sell(stock_id)
     @stock[stock_id].i_sold_for *= 0.9
 
-    timer(rand(5)+1) {
-      sell_stock_all(stock_id, @stock[stock_id].i_sold_for, true)
+    timer( random(1 .. 5) ) {
+      sell_pkc(stock_id, amount(stock_id) )
     }
   end
 
@@ -151,11 +128,10 @@ end
 
 @klienci = []
 
-88.times { |i|
+ARGV[0].times { |i|
   @klienci << Thread.new {
     sleep(1.0*rand(100)/10.0)
-    DumbClient.new('%06d' %(i+402), i+402)
-    #EventMachine.connect '127.0.0.1', 12345, DumbClient, '%06d' %(i+2), i+2
+    DumbClient.new('%06d' %(i+900))
   }
 }
 
