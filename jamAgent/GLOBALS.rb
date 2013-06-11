@@ -12,11 +12,11 @@ $PARENT_DIR = __FILE__[0..File.dirname(__FILE__).chop.rindex('/')]
 
 # Agent startup delay in seconds
 $agent_start_delay_min = 1.0
-$agent_start_delay_max = 30.0
+$agent_start_delay_max = 560.0
 
 # sleep time between rounds\iterations in seconds. SHOULD BE FLOAT TYPE !
 $sleep_time_min = 7.0
-$sleep_time_max = 15.0
+$sleep_time_max = 35.0
 
 # Maximum number of rounds\iterations of idle beheaviour
 $max_idle_min = 3
