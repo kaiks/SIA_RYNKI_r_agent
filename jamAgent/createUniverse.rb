@@ -47,7 +47,7 @@ def registerUser(password)
 	sock.print RegisterUserReq.new(password).forge
 	
 	s, = IO.select [sock], [], [], 1
-	raise "timeout while registering." if s[0] == nil
+	raise "timeout while registering." if s == nil
 	
 	registerAnswer = StockPacketIn.new sock.recv_nonblock(512)
 	sock.close()
@@ -93,23 +93,21 @@ end
 def generateDataForAgent(agent, count)
 	r = Random.new
 	data  = []
-	#puts IrrationalPanicAgent.generateRandomCoef(r)
-	#puts "#{agent}"
 	createUserAccounts(count).each { |id, password|
 					data << [id, password, agent.generateRandomCoef(r)]
 	}
 	data
 end
 
-
+require 'date'
 def startUniverse
-			 
-	count = 250	
+	puts "[#{DateTime.now}] Starting new agent universe with #{ARGV[0]} agents...\n"
+	count = ARGV[0].to_i
 	agentsData = {IrrationalPanicAgent => generateDataForAgent(IrrationalPanicAgent, count)}
 	
 	
 	agentIds, createdAgents = createUniverse(agentsData)
-	
+	Thread
 	createdAgents.each { |agent_name, amount| puts "Created Agents: #{agent_name}  =>  #{amount}"}
 	
 	threads = runAsThreads(agentIds)
@@ -117,7 +115,6 @@ def startUniverse
 	puts "threads created: #{agentIds.length}"
 	
 	threads.each {|id, th| th.join()}
-	
 end 
 
 startUniverse

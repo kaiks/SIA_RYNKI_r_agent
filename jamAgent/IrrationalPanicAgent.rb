@@ -6,31 +6,38 @@ require 'stockInformation.rb'
 class IrrationalPanicAgent < SimpleAgent
 	attr_accessor :coef_price_decrease, :coef_price_increase, :best_offers, :best_offers_grad,
 				  :coef_money_when_buying, :coef_orders_when_selling, :subscribed_count,
-				  :rand_for_action, :subscribed, :max_orders_treshold
+				  :rand_for_action, :subscribed, :max_orders_treshold, :max_buy_candidates, :max_sell_candidates
     
 	def self.generateRandomCoef(rand_gen = Random.new, coef_dict = {})
 		
 		dict = super(rand_gen, coef_dict)
 		
 		#coef_price_decrease 
-		cpd_min, cpd_max = coef_dict.fetch(:coef_price_decrease, [-0.15, -0.01])
+		cpd_min, cpd_max = coef_dict.fetch(:coef_price_decrease, [$coef_price_decrease_min, $coef_price_decrease_max])
 		#coef_price_increase 
-		cpi_min, cpi_max = coef_dict.fetch(:coef_price_increase, [0.01, 0.15])
+		cpi_min, cpi_max = coef_dict.fetch(:coef_price_increase, [$coef_price_increase_min, $coef_price_increase_max])
 		#coef_money_when_buying 
-		cmwb_min, cmwb_max = coef_dict.fetch(:coef_money_when_buying,[0.05, 1])
+		cmwb_min, cmwb_max = coef_dict.fetch(:coef_money_when_buying,[$coef_money_when_buying_min, $coef_money_when_buying_max])
 		#coef_orders_when_selling
-		cows_min, cows_max = coef_dict.fetch(:coef_orders_when_selling, [0.05, 1])
+		cows_min, cows_max = coef_dict.fetch(:coef_orders_when_selling, [$coef_orders_when_selling_min, $coef_orders_when_selling_max])
 		#subscribed_count 
-		sc_min, sc_max = coef_dict.fetch(:subscribed_count, [19, 21])
-		
-		mot_min, mot_max = coef_dict.fetch(:max_orders_treshold, [2, 20]) 
+		sc_min, sc_max = coef_dict.fetch(:subscribed_count, [$subscribed_count_min, $subscribed_count_max])
+		# max_orders_treshold
+		mot_min, mot_max = coef_dict.fetch(:max_orders_treshold, [$max_orders_treshold_min, $max_orders_treshold_max]) 
+		# max_buy_candidates
+		mbc_min, mbc_max = coef_dict.fetch(:max_buy_candidates, [$max_buy_candidates_min, $max_buy_candidates_max]) 
+		# max_sell_candidates
+		msc_min, msc_max = coef_dict.fetch(:max_sell_candidates, [$max_sell_candidates_min, $max_sell_candidates_max]) 
 		
 		coefs = {:coef_price_decrease => rand_gen.rand(cpd_min..cpd_max),
 				 :coef_price_increase => rand_gen.rand(cpi_min..cpi_max),
 				 :coef_money_when_buying => rand_gen.rand(cmwb_min..cmwb_max),
 				 :coef_orders_when_selling => rand_gen.rand(cows_min..cows_max),
 				 :subscribed_count => rand_gen.rand(sc_min..sc_max),
-				 :max_orders_treshold => rand_gen.rand(mot_min..mot_max)}
+				 :max_orders_treshold => rand_gen.rand(mot_min..mot_max),
+				 :max_buy_candidates => rand_gen.rand(mbc_min..mbc_max),
+				 :max_sell_candidates => rand_gen.rand(msc_min..msc_max)
+				 }
 		
 		dict.update(coefs)
 	end
@@ -47,10 +54,13 @@ class IrrationalPanicAgent < SimpleAgent
 		inst.coef_orders_when_selling = data.fetch(:coef_orders_when_selling)
 		raise "coef_orders_when_selling <= 0" unless inst.coef_orders_when_selling > 0.0
 		inst.subscribed_count = data.fetch(:subscribed_count)
-		raise "subscribed_count <= 0" unless inst.subscribed_count > 0
+		raise "subscribed_count < 1" unless inst.subscribed_count >= 1
 		inst.max_orders_treshold = data.fetch(:max_orders_treshold)
-		raise "max_orders_trashold <= 0" unless inst.max_orders_treshold > 0
-		
+		raise "max_orders_trashold < 1" unless inst.max_orders_treshold >= 1
+		inst.max_buy_candidates = data.fetch(:max_buy_candidates)
+		raise "max_buy_candidates < 1" unless inst.subscribed_count >= 1
+		inst.max_sell_candidates = data.fetch(:max_sell_candidates)
+		raise "max_sell_candidats < 1" unless inst.max_orders_treshold >= 1
 		
 		inst.rand_for_action = Random.new	
 		inst.subscribed = []
@@ -105,8 +115,6 @@ class IrrationalPanicAgent < SimpleAgent
 
 	def sellStock(stockId, price_change_coef)
 		#puts "Time to sell some stock #{stockId} #{price_change_coef}"
-		# It should NEVER happen, but it does..
-		raise "NO CO KURWA?!" unless @my_stocks.include? stockId
 		#puts "ORDERS:\n"
 		#@my_orders.each {|k,v| puts "id= #{k} =>  #{v}\n"}
 		computed_stock_amount = (@my_stocks[stockId] * @coef_orders_when_selling).to_i
@@ -114,7 +122,7 @@ class IrrationalPanicAgent < SimpleAgent
 		stock_amount = computed_stock_amount unless computed_stock_amount < 0
 		return false unless stock_amount > 0
 		# Will sell for a little bit less than the best offer suggests
-		price_per_stock = Random.new.rand 1...100
+		price_per_stock = Random.new.rand $random_price_per_stock_when_selling_min...$random_price_per_stock_when_selling_max
 		if @best_offers[:buy].include? stockId
 			price_per_stock = [@best_offers[:buy][stockId].price + (@best_offers[:buy][stockId].price * price_change_coef).to_i, 1].max
 		end
@@ -159,10 +167,10 @@ class IrrationalPanicAgent < SimpleAgent
 
 		action_sell = false
 		action_buy = false
-		sell_candidates_higher.each {|stockId, v| action_sell ||= sellStock(stockId, @coef_price_decrease)}
+		sell_candidates_higher.keys.sample(@max_sell_candidates).each {|stockId| action_sell ||= sellStock(stockId, @coef_price_decrease)}
 		#sell_candidate_panic.each { |stockId| sellStock(stockID, @coef_price_decrease)}
 		#buy_candidate_higher.each {|stockId| sellStock(stockId, @coef_price_increase)}
-		buy_candidates_panic.each { |stockId, v| action_buy ||= buyStock(stockId, @coef_price_increase)}
+		buy_candidates_panic.keys.sample(@max_buy_candidates).each { |stockId| action_buy ||= buyStock(stockId, @coef_price_increase)}
 		# If false then it means there was no action
 		#puts "ACTED?"
 		action_sell and action_buy

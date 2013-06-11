@@ -12,10 +12,11 @@ class SimpleAgent
 	
 	def self.generateRandomCoef(rand_gen = Random.new, coef_dist = {})
 		
-		sleep_time_min, sleep_time_max = coef_dist.fetch(:sleep_time, [1, 3])
-		max_idle_min, max_idle_max = coef_dist.fetch(:max_idle, [2,5])
+		sleep_time_min, sleep_time_max = coef_dist.fetch(:sleep_time, [$sleep_time_min, $sleep_time_max])
+		max_idle_min, max_idle_max = coef_dist.fetch(:max_idle, [$max_idle_min,$max_idle_max])
 		
 		{:sleep_time => rand_gen.rand(sleep_time_min..sleep_time_max),
+		
 		 :max_idle => rand_gen.rand(max_idle_min..max_idle_max)}
 
 	end
@@ -51,9 +52,9 @@ class SimpleAgent
 		@socket.print GetMyStocks.new.forge
 		@socket.print GetMyOrders.new.forge
 		
-		sock, = IO.select [@socket], [], [], 3
+		sock, = IO.select [@socket], [], [], $timeout_for_select
 		if sock == nil
-			puts "Timeout!"
+			puts "#{@id}updateOrdersAndStocks timeouted!"
 			return false
 		end
 		newData!
@@ -110,14 +111,14 @@ class SimpleAgent
 		#puts id.to_s + " tries to login!"
 		@socket.print LoginUserReq.new(id, password).forge
 		
-		sock, = IO.select [@socket], [], [], 3
+		sock, = IO.select [@socket], [], [], $timeout_for_select
 		if sock == nil
 			puts "Timeout!"
 			return false
 		end
 		
 		# :-(	
-		loginAnswer = tryReadWholePacket 1, 3
+		loginAnswer = tryReadWholePacket 1, $reading_packet_trials
 		case loginAnswer.id
 			when $packets[:LOGIN_USER_RESP_OK] then
 				puts "#{id} logged succesfuly"
@@ -138,14 +139,14 @@ class SimpleAgent
 	def myStocksAndMoney
 		@socket.print GetMyStocks.new.forge
 		
-		sock, = IO.select [@socket], [], [], 3
+		sock, = IO.select [@socket], [], [], $timeout_for_select
 		if sock == nil
-			puts "Timeout!"
+			puts "#{@id}myStocksAndMoney timeout!"
 			return false
 		end
 		
 		# :-(	
-		packet = tryReadWholePacket 1, 3
+		packet = tryReadWholePacket 1, 5
 		
 		case packet.id
 			when $packets[:GET_MY_STOCKS_RESP] then
@@ -166,14 +167,14 @@ class SimpleAgent
 	def myOrders
 		@socket.print GetMyOrders.new.forge
 		
-		sock, = IO.select [@socket], [], [], 3
+		sock, = IO.select [@socket], [], [], $timeout_for_select
 		if sock == nil
-			puts "Timeout!"
+			puts "#{@id} myOrders timeouted!"
 			return false
 		end
 		
 		# :-(	
-		packet = tryReadWholePacket 1, 3
+		packet = tryReadWholePacket 1, $reading_packet_trials
 		my_orders = {:buy => {}, :sell => {}}
 		case packet.id
 			when $packets[:GET_MY_ORDERS_RESP] then
@@ -210,7 +211,7 @@ class SimpleAgent
 	end
 	
 	def tryConnect
-		sec_sleep = 0.1
+		sec_sleep = 0.5
 		@reconnect_trials.times do |value|
 									begin
 										@socket = TCPSocket.new $host, $port

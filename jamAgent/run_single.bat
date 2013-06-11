@@ -1,1 +1,1 @@
-jruby  --server -Xerrno.backtrace=true  -Xss25k -Xmx2048m -J-Djruby.thread.pooling=true createUniverse.rb > simulation1.out 2> simulation1.err
+jruby  --server -Xerrno.backtrace=true  -Xss25k -Xmx2048m -J-Djruby.thread.pooling=true createUniverse.rb %1 > simulation1.out 2> simulation1.err
