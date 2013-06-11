@@ -16,7 +16,7 @@ class SimpleAgent
 		max_idle_min, max_idle_max = coef_dist.fetch(:max_idle, [$max_idle_min,$max_idle_max])
 		
 		{:sleep_time => rand_gen.rand(sleep_time_min..sleep_time_max),
-		
+		 :reconnect_trials => $reconnect_trials,
 		 :max_idle => rand_gen.rand(max_idle_min..max_idle_max)}
 
 	end

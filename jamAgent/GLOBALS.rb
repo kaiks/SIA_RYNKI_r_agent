@@ -10,13 +10,17 @@ $PARENT_DIR = __FILE__[0..File.dirname(__FILE__).chop.rindex('/')]
 ########################## DEFAULT INTERVALS FOR GENRATING RANDOM DATA IN AGENTS! ###################
 #####################################################################################################
 
+# Agent startup delay in seconds
+$agent_start_delay_min = 1.0
+$agent_start_delay_max = 30.0
+
 # sleep time between rounds\iterations in seconds. SHOULD BE FLOAT TYPE !
-$sleep_time_min = 3.0
+$sleep_time_min = 7.0
 $sleep_time_max = 15.0
 
 # Maximum number of rounds\iterations of idle beheaviour
-$max_idle_min = 5
-$max_idle_max = 15
+$max_idle_min = 3
+$max_idle_max = 10
 
 # Price drop coefficent * 100% = price drop % 
 # Used for determining which stocks should agent 
@@ -63,4 +67,7 @@ $max_sell_candidates_max = 3
 $reading_packet_trials = 3
 
 # Time in seconds before select gives up waiting for a socket to become active (for reading).
-$timeout_for_select = 10
+$timeout_for_select = 20
+
+# 
+$reconnect_trials = 2

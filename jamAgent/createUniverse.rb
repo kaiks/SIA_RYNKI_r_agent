@@ -46,10 +46,10 @@ def registerUser(password)
 	sock = TCPSocket.new $host, $port
 	sock.print RegisterUserReq.new(password).forge
 	
-	s, = IO.select [sock], [], [], 1
+	s, = IO.select [sock], [], [], 10
 	raise "timeout while registering." if s == nil
 	
-	registerAnswer = StockPacketIn.new sock.recv_nonblock(512)
+	registerAnswer = StockPacketIn.new sock.recv_nonblock(2048)
 	sock.close()
 	case registerAnswer.id
 		when $packets[:REGISTER_USER_RESP_OK] then
@@ -82,10 +82,12 @@ def createUserAccounts(count)
 	usersAccountsInfo
 end
 
-def runAsThreads(agentIds)
+def runAsThreadsWithRandomStartTime(agentIds)
 	threads = {}
+	rand = Random.new
 	agentIds.each { |id, obj|
-							threads.merge! id => Thread.new {obj.start!}}
+							startup_delay = rand.rand($agent_start_delay_min..$agent_start_delay_max)
+							threads.merge! id => Thread.new {sleep startup_delay; obj.start!}}
 	threads
 end
 
@@ -107,10 +109,10 @@ def startUniverse
 	
 	
 	agentIds, createdAgents = createUniverse(agentsData)
-	Thread
 	createdAgents.each { |agent_name, amount| puts "Created Agents: #{agent_name}  =>  #{amount}"}
 	
-	threads = runAsThreads(agentIds)
+	
+	threads = runAsThreadsWithRandomStartTime(agentIds)
 	
 	puts "threads created: #{agentIds.length}"
 	
