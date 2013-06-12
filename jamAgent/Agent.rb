@@ -64,11 +64,11 @@ class SimpleAgent
 		@buffer = ''
 		if not tryConnect
 			puts "#{id} can't connect to host"
-			return nil
+			sleep 20
 		end
 		if not loginUser
 			puts "#{id} can't log in."
-			return nil
+			sleep 20
 		end
         iterations = 0
         while true
@@ -93,11 +93,11 @@ class SimpleAgent
 				puts "Disconnected..."
 				if not tryConnect
 					puts "#{id} can't connect to host"
-					return nil
+				sleep 20
 				end
 				if not loginUser
 					puts "#{id} can't log in."
-					return nil
+					sleep 20
 				end
                 iterations = 0
             end
