@@ -46,7 +46,7 @@ class BossClient < StockClient
       order = BuyStockReq.new
       #say "Trying to buy #{stock['id_zasobu']} #{stock}"
       order.stock_id = stock['id_zasobu']
-      order.amount = 500
+      order.amount = 10000000/stock['cena']
       order.price = stock['cena']-5
       send order.forge
     }

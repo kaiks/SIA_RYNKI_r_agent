@@ -30,7 +30,7 @@ class NetworkedStockClient
     @threads            = Set.new
     @sendlock           = NotMutex.new
     @debug              = false
-    @recv_loop_delay    = 0.1
+    @recv_loop_delay    = 0.01
     @last_received      = Time.now #dumb congestion prevention
   end
 
@@ -53,7 +53,7 @@ class NetworkedStockClient
       begin
         Timeout::timeout(30) {
           begin
-            data = @socket.readpartial(4096)
+            data = @socket.readpartial(262144)
           rescue
             sleep(40)
           end

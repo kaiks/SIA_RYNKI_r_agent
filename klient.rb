@@ -33,7 +33,7 @@ class StockClient < NetworkedStockClient
 
   def do_actions_loop
     loop {
-      say 'action loop'
+      #say 'action loop'
       sleep(@execution_delay)
       @actionlock.synchronize {
         @actions.sort.each { |v| v[1].call }
@@ -74,6 +74,7 @@ class StockClient < NetworkedStockClient
   def sell(stock_id, amount, price)
     price = price.to_i
     action_id = action_id(2, stock_id)
+    action_id = action_id(4, stock_id) if price == 1
     @actionlock.synchronize {
       @actions[action_id] = lambda {
         stock(stock_id).trading = true
@@ -149,9 +150,9 @@ class StockClient < NetworkedStockClient
 
 
   def timer(sec, &block)
-    Thread.new {
+    @threads << Thread.new {
       sleep(sec)
-      say 'Executing thread'
+      #say 'Executing thread'
       block.call
     }
   end

@@ -51,7 +51,9 @@ class DumbClient < StockClient
         if @stock[k].initialized && (@stock[k].i_sold_for.to_i > 0) && (@stock[k].i_bought_for.to_i > 0)
           say "SI ISF #{@stock[k].i_sold_for}"
           say "SI IBF #{@stock[k].i_bought_for}"
-          buy_for(k, @stock[k].i_bought_for, 0.5)
+          if cash>@stock[k].i_bought_for
+            buy_for(k, @stock[k].i_bought_for, 0.5)
+          end
           sell_all_stocks(k,@stock[k].i_sold_for)
         else
           send SubscribeStock.new(k).forge
@@ -128,7 +130,7 @@ end
 
 @klienci = []
 
-ARGV[0].times { |i|
+ARGV[0].to_i.times { |i|
   @klienci << Thread.new {
     sleep(1.0*rand(100)/10.0)
     DumbClient.new('%06d' %(i+900))
