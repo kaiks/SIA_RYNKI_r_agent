@@ -88,6 +88,7 @@ class StockPacketIn < StockPacket
 
   def pull(type)
     retval = nil
+    @bytearray ||= []
     case type
       when 'int' then
         retval = @bytearray[@offset..(@offset+3)].pack('c*').unpack('l>')[0]
