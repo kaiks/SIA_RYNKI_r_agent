@@ -9,7 +9,7 @@ class DumbClient < StockClient
     $csv.each_key { |k| @stock[k] = StockInfo.new }
 
     super(password, user_id)
-    @expected_gain = gain || random(0.02 .. 0.1)
+    @expected_gain = gain || random(0.01 .. 0.1)
     @tolerable_loss = @expected_gain / 2.0 #loss aversion
     @debug = true
   end
@@ -42,6 +42,11 @@ class DumbClient < StockClient
 
   def on_transaction_change packet
     @stock[packet.stock_id].fromTransactionChange packet
+  end
+
+
+  def sell_pkc(id, amount)
+    sell(id, amount, @stock[id].transaction_price/2)
   end
 
 

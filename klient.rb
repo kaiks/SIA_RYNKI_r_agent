@@ -9,6 +9,7 @@ require 'csvreader.rb'
 require 'stock_info.rb'
 require 'networked_stock_client.rb'
 
+require 'gauss.rb'
 
 Thread.abort_on_exception = true
 
