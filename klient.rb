@@ -107,7 +107,7 @@ class StockClient < NetworkedStockClient
   def buy(stock_id, amount, price)
     price = price.to_i
     amount = amount.to_i
-    action_id = action_id(1, stock_id)
+    action_id = action_id(1, stock_id+price)
     @actionlock.synchronize {
       @actions[action_id] = lambda {
         stock(stock_id).trading = true

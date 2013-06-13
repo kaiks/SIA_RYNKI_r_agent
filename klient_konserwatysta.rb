@@ -89,7 +89,7 @@ class DumbClient < StockClient
 
     # 10% szansy na chec sprzedazy
     1.in(10) {
-      if @stock[order[2]].transaction_price < (1-@tolerable_loss) * @stock[order[2]].i_bought_for
+      if @stock[order[2]].transaction_price < (1.0-@tolerable_loss) * @stock[order[2]].i_bought_for
         cancel_order(order[1])
         panic_sell(order[2])
       end
@@ -109,12 +109,11 @@ class DumbClient < StockClient
 
     timer(random(2.0 .. 20.0)) {
       cancel_order(order[1]) if order[3]>2
-      sleep(0.1)
 
       randval = random(4)
 
       if randval > 0
-        price = (1.0 - @expected_gain) * @stock[order[2]].i_bought_for
+        price = (1.0 + random(0.00 .. 0.1)) * @stock[order[2]].i_bought_for
         buy_for(order[2], price, 0.5)
       else
         get_more_stock(order[2], true)
