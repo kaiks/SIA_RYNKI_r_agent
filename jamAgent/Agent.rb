@@ -93,7 +93,7 @@ class SimpleAgent
 				puts "Disconnected..."
 				if not tryConnect
 					puts "#{id} can't connect to host"
-				sleep 20
+			sleep 20
 				end
 				if not loginUser
 					puts "#{id} can't log in."

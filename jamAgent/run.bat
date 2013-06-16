@@ -1,2 +1,1 @@
-
-for /l %%x in (1,1,%1) do  start "agentTask_%%x" jruby --server -J-Djruby.thread.pooling=true -Xerrno.backtrace=true createUniverse.rb %2 1> %%x.out 2> %%x.err
+jruby  --server -Xerrno.backtrace=true  -Xss25k -Xmx2048m -J-Djruby.thread.pooling=true createUniverse.rb %1 > simulation1.out 2> simulation1.err

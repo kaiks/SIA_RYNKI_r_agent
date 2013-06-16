@@ -216,11 +216,11 @@ class IrrationalPanicAgent < SimpleAgent
 			when :buy_stocks
 				stockId = stock_available_to_buy.sample 
 				puts "Buying new stockid = #{stockId}"
-				puts "Something wrong happend while buying..." if not buyStock(stockId, @coef_price_increase)
+				#puts "Something wrong happend while buying..." if not buyStock(stockId, @coef_price_increase)
 			when :sell_stocks
 				stockId = stock_available_to_sell.sample 
 				puts "Selling stock_id = #{stockId}"
-				puts "Something wrong happend while selling..." if not sellStock(stockId, @coef_price_decrease)			
+				#puts "Something wrong happend while selling..." if not sellStock(stockId, @coef_price_decrease)			
 			else
 				raise "Unkown random action ? #{value}" 
 			end
