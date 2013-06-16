@@ -37,8 +37,8 @@ $coef_money_when_buying_min = 0.05
 $coef_money_when_buying_max = 1.0
 
 # this * 100% = % of a given stocks agent will be selling
-$coef_orders_when_selling_min = 0.05
-$coef_orders_when_selling_max = 1.0
+$coef_stocks_when_selling_min = 0.05
+$coef_stocks_when_selling_max = 1.0
 
 # Max count of subscribed stocks.
 $subscribed_count_min = 3
