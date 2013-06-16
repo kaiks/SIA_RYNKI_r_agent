@@ -9,7 +9,7 @@ class DumbClient < StockClient
     $csv.each_key { |k| @stock[k] = StockInfo.new }
 
     super(password, user_id)
-    @expected_gain = gain || random(0.02 .. 0.1)
+    @expected_gain = gain || random(0.01 .. 0.1)
     @tolerable_loss = @expected_gain / 2.0 #loss aversion
     @debug = true
   end
@@ -42,6 +42,11 @@ class DumbClient < StockClient
 
   def on_transaction_change packet
     @stock[packet.stock_id].fromTransactionChange packet
+  end
+
+
+  def sell_pkc(id, amount)
+    sell(id, amount, @stock[id].transaction_price/2)
   end
 
 
@@ -89,7 +94,7 @@ class DumbClient < StockClient
 
     # 10% szansy na chec sprzedazy
     1.in(10) {
-      if @stock[order[2]].transaction_price < (1-@tolerable_loss) * @stock[order[2]].i_bought_for
+      if @stock[order[2]].transaction_price < (1.0-@tolerable_loss) * @stock[order[2]].i_bought_for
         cancel_order(order[1])
         panic_sell(order[2])
       end
@@ -109,12 +114,11 @@ class DumbClient < StockClient
 
     timer(random(2.0 .. 20.0)) {
       cancel_order(order[1]) if order[3]>2
-      sleep(0.1)
 
       randval = random(4)
 
       if randval > 0
-        price = (1.0 - @expected_gain) * @stock[order[2]].i_bought_for
+        price = (1.0 + random(0.00 .. 0.1)) * @stock[order[2]].i_bought_for
         buy_for(order[2], price, 0.5)
       else
         get_more_stock(order[2], true)

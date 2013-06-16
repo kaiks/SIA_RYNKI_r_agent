@@ -5,11 +5,10 @@ require 'klient.rb'
 class DumbClient < StockClient
   def initialize(password=nil, user_id=0)
     @stock = {}
-    @gauss = RandomGaussian.new(0.06,0.03)
+    @gauss = RandomGaussian.new(0.02,0.007)
     $csv.each_key { |k| @stock[k] = StockInfo.new }
     super(password, user_id)
     @expected_gain = @gauss.rand
-    @greedy_gain   = 1.5
     @expected_bargain = -@gauss.rand
     say "Expected gain: #{@expected_gain.to_s} bargain: #{@expected_bargain.to_s}"
     @debug = true
@@ -41,6 +40,8 @@ class DumbClient < StockClient
 
   def on_transaction_change packet
     @stock[packet.stock_id].fromTransactionChange packet
+    @stock[packet.stock_id].i_sold_for = @stock[packet.stock_id].transaction_price*(1.0+@expected_gain)
+    @stock[packet.stock_id].i_bought_for = @stock[packet.stock_id].transaction_price*(1.0+@expected_bargain)
   end
 
 
