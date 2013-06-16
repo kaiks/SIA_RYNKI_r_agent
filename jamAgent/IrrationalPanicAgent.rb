@@ -72,7 +72,7 @@ class IrrationalPanicAgent < SimpleAgent
 
 	def loginUser
 		return false if not super
-		#High time to chose subscriptions! 
+		#High time to choose subscriptions! 
 		if @subscribed.empty?
 			@subscribed = $stock_info.keys.sample(@subscribed_count)
 			raise "my_stocks.length != 1. Something very wrong! #{@my_stocks}" unless @my_stocks.length == 1 
@@ -81,8 +81,8 @@ class IrrationalPanicAgent < SimpleAgent
 		end
 		subscribe subscribed
 		# After login grad should be 0.0 as we have no data to make other claims
-		subscribed.each {|stockId| @best_offers_grad[:sell][stockId] = 0.0 
-								   @best_offers_grad[:buy][stockId] = 0.0}
+		subscribed.each {|stockId| @best_offers_grad[:sell][stockId] = [0.0,0.0] 
+								   @best_offers_grad[:buy][stockId] = [0.0, 0.0]}
 		
 		true
 	end	
@@ -150,7 +150,7 @@ class IrrationalPanicAgent < SimpleAgent
 				@socket.print CancelOrderReq.new(orderId).forge
 		end
 		sell_candidates_higher = @best_offers_grad[:buy].select { |stockId, diff_perc| 
-									 diff_perc > @coef_price_increase and @my_stocks.include? stockId and 
+									 diff_perc[1] > @coef_price_increase and @my_stocks.include? stockId and 
 									 @best_offers[:buy].include? stockId}
 
 		#sell_candidates_panic = best_offers_grad[:buy].select 
@@ -162,7 +162,7 @@ class IrrationalPanicAgent < SimpleAgent
 		#							 diff_perc > @coef_price_increase and my_stocks.include? stockId}
 
 		buy_candidates_panic = @best_offers_grad[:sell].select {|stockId, diff_perc| 
-									 diff_perc < @coef_price_decrease and @best_offers[:sell].include? stockId and 
+									 diff_perc[1] < @coef_price_decrease and @best_offers[:sell].include? stockId and 
 									 @my_money >= @best_offers[:sell][stockId].price}
 
 		action_sell = false
@@ -222,7 +222,7 @@ class IrrationalPanicAgent < SimpleAgent
 				puts "Selling stock_id = #{stockId}"
 				#puts "Something wrong happend while selling..." if not sellStock(stockId, @coef_price_decrease)			
 			else
-				raise "Unkown random action ? #{value}" 
+				raise "Unknown random action ? #{value}" 
 			end
 		true
 	end
@@ -248,18 +248,21 @@ class IrrationalPanicAgent < SimpleAgent
 			
 				order_type = TO_ORDER_TYPE[best_order.type]
 				
-				old_best_offer = @best_offers[order_type].fetch(stockId, OpenStruct.new(:amount => 0, :price => 0))
-				
-				@best_offers[order_type].merge! stockId => val 
+				old_ppsd, old_best_offer = @best_offers[order_type].fetch(stockId, [0.0, OpenStruct.new(:amount => 0, :price => 0)])
+				new_best_offer = val
+				@best_offers[order_type].merge! stockId => new_best_offer 
 				#puts @best_offers[order_type][stockId]
 				# Percentage loss\rise
-				price_amount_old = old_best_offer.amount.to_f + old_best_offer.price.to_f
-				price_amount_new = @best_offers[order_type][stockId].amount.to_f * @best_offers[order_type][stockId].price.to_f
 				# no best offers, all gone!
-				if price_amount_new == 0
-					@best_offers_grad[order_type].update({stockId => @coef_price_increase + 0.001})
+				if new_best_offer.price == 0
+				
 				else
-					@best_offers_grad[order_type].update({stockId => (price_amount_new - price_amount_old) / (price_amount_new + price_amount_old)})
+					ppsd = (old_best_offer.price.to_f * old_best_offer.amount.to_f + new_best_offer.price.to_f * new_best_offer.amount.to_f) / (new_best_offer.amount.to_f * old_best_offer.amount.to_f) 	
+					if old_ppsd == 0.0:
+						@best_offers_grad[order_type].update({stockId => [ppsd, 0.0]})
+					else
+						grad = (ppsd - old_ppsd) / (old_ppsd)
+						@best_offers_grad[order_type].update({stockId => [ppsd, grad]})
 				end
 				#puts @best_offers
 				#puts "\n", @best_offers_grad, "\n"
